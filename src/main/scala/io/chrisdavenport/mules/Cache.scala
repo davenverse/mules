@@ -21,9 +21,9 @@ object BasicCache {
     ref <- Ref.of[F, Map[K, (V, Long)]](Map())
   } yield {
     new BasicCache[F, K, V]{
-      private def isStale(setAt: Long): F[Boolean] = for {
+      private def isStale(expiresAt: Long): F[Boolean] = for {
         now <- Timer[F].clockMonotonic(NANOSECONDS)
-      } yield (setAt + goodFor) >= now
+      } yield expiresAt >= now
 
       private def updateByGen(k: K): F[V] =
         genLock.withPermit(gen(k).flatMap(v => put(k, v).as(v)))
@@ -40,7 +40,7 @@ object BasicCache {
 
       override def put(k: K, v: V): F[Unit] = for {
         now <- Timer[F].clockMonotonic(NANOSECONDS)
-        _ <- ref.update(_.updated(k , (v, now)))
+        _ <- ref.update(_.updated(k , (v, now + goodFor)))
       } yield ()
 
       def clear: F[Unit] = ref.set(Map())
