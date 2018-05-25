@@ -14,9 +14,10 @@ trait BasicCache[F[_], K, V]{
 }
 
 object BasicCache {
+
   // Good For In Nanoseconds
   // Generator Function
-  def uncancellable[F[_]: Async: Timer, K, V](goodFor: Long, gen: K => F[V]): F[BasicCache[F, K, V]] = for {
+  def uncancellableByGen[F[_]: Async: Timer, K, V](goodFor: Long, gen: K => F[V]): F[BasicCache[F, K, V]] = for {
     genLock <- Semaphore.uncancelable[F](1)
     ref <- Ref.of[F, Map[K, (V, Long)]](Map())
   } yield {
