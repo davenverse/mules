@@ -162,12 +162,17 @@ object Cache {
   /**
     * Delete all items that are expired.
     **/
-  def purgeExpired[F[_]: Sync: Timer, K, V](c: Cache[F, K, V]): F[Unit] =
+  def purgeExpired[F[_]: Sync: Timer, K, V](c: Cache[F, K, V]): F[Unit] = {
+    def purgeKeyIfExpired(m: Map[K, CacheItem[V]], k: K, checkAgainst: TimeSpec): Unit = 
+      m.get(k).fold(())(item => if (isExpired(checkAgainst, item)) {m.-(k); ()} else ())
     for {
       l <- keys(c)
       now <- Timer[F].clockMonotonic(NANOSECONDS)
-      _ <- l.traverse_(k => lookupItemT(true, k,c, TimeSpec.fromNanos(now)))
+      _ <- c.ref.update(m => {l.map(k => purgeKeyIfExpired(m, k, TimeSpec.fromNanos(now))); m}) // One Big Transactional Change
     } yield ()
+  }
+
+  
 
 
 }
