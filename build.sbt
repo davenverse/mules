@@ -1,5 +1,5 @@
 lazy val core = project.in(file("."))
-    .settings(commonSettings)
+    .settings(commonSettings, releaseSettings)
     .settings(
       name := "mules"
     )
@@ -22,7 +22,7 @@ lazy val commonSettings = Seq(
   scalaVersion := "2.12.6",
   crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
 
-  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.6" cross CrossVersion.binary),
+  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.7" cross CrossVersion.binary),
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
 
   libraryDependencies ++= Seq(
