@@ -8,16 +8,45 @@ import cats.implicits._
 import scala.concurrent.duration._
 import scala.collection.mutable.Map
 
+class Cache[F[_], K, V] private[Cache] (
+  private[Cache] val ref: Ref[F, Map[K, Cache.CacheItem[V]]], 
+  val defaultExpiration: Option[Cache.TimeSpec]
+){
+  // Lookups
+  def lookup(k: K)(implicit F: Sync[F], T: Timer[F]): F[Option[V]] =
+    Cache.lookup(this)(k)
+  def lookupNoUpdate(k: K)(implicit F: Sync[F], T: Timer[F]): F[Option[V]] =
+    Cache.lookupNoUpdate(this)(k)
+
+  // Inserting
+  def insert(k: K, v: V)(implicit F: Sync[F], T: Timer[F]): F[Unit] = 
+    Cache.insert(this)(k, v)
+  def insertWithTimeout(timeout: Option[Cache.TimeSpec])(k: K, v: V)(implicit F: Sync[F], T: Timer[F]) =
+    Cache.insertWithTimeout(this)(timeout)(k, v)
+
+  // Deleting
+  def delete(k: K)(implicit F: Sync[F]): F[Unit] = Cache.delete(this)(k)
+  def purgeExpired(implicit F: Sync[F], T: Timer[F]) = Cache.purgeExpired(this)
+
+  // Informational
+  def size(implicit F: Sync[F]): F[Int] = Cache.size(this)
+  def keys(implicit F: Sync[F]): F[List[K]] = Cache.keys(this)
+}
+
 object Cache {
-  case class Cache[F[_], K, V](ref: Ref[F, Map[K, CacheItem[V]]], defaultExpiration: Option[TimeSpec])
   // Value of Time In Nanoseconds
-  case class TimeSpec(
-    nanos: Long
+  class TimeSpec private (
+    val nanos: Long
   ) extends AnyVal
   object TimeSpec {
+    def fromDuration(duration: FiniteDuration): TimeSpec = 
+      new TimeSpec(duration.toNanos)
+
+    def fromNanos(l: Long): TimeSpec =
+      new TimeSpec(l)
 
   }
-  case class CacheItem[A](
+  private[Cache] case class CacheItem[A](
     item: A,
     itemExpiration: Option[TimeSpec]
   )
@@ -30,21 +59,21 @@ object Cache {
     * If the specified default expiration value is None, items inserted by insert will never expire.
     **/
   def createCache[F[_]: Sync, K, V](defaultExpiration: Option[TimeSpec]): F[Cache[F, K, V]] = 
-    Ref.of[F, Map[K, CacheItem[V]]](Map.empty[K, CacheItem[V]]).map(Cache[F, K, V](_, defaultExpiration))
+    Ref.of[F, Map[K, CacheItem[V]]](Map.empty[K, CacheItem[V]]).map(new Cache[F, K, V](_, defaultExpiration))
 
   /**
     * Change the default expiration value of newly added cache items.
     **/
   def setDefaultExpiration[F[_], K, V](cache: Cache[F, K, V], defaultExpiration: Option[TimeSpec]): Cache[F, K, V] = 
-    cache.copy(defaultExpiration = defaultExpiration)
+    new Cache[F, K, V](cache.ref, defaultExpiration)
 
   /**
     * Create a deep copy of the cache.
     **/ 
   def copyCache[F[_]: Sync, K, V](cache: Cache[F, K, V]): F[Cache[F, K, V]] = for {
     current <- cache.ref.get
-    cache <- Ref.of[F, Map[K, CacheItem[V]]](current).map(Cache[F, K, V](_, cache.defaultExpiration))
-  } yield cache
+    ref <- Ref.of[F, Map[K, CacheItem[V]]](current)
+  } yield new Cache[F, K, V](ref, cache.defaultExpiration)
 
 
   /**
@@ -63,7 +92,7 @@ object Cache {
   def insertWithTimeout[F[_]: Sync: Timer, K, V](cache: Cache[F, K, V])(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit] =
     for {
       now <- Timer[F].clockMonotonic(NANOSECONDS)
-      timeout = optionTimeout.map(ts => ts.copy(nanos = now + ts.nanos))
+      timeout = optionTimeout.map(ts => TimeSpec.fromNanos(now + ts.nanos))
       _ <- cache.ref.update(_.+((k -> CacheItem[V](v, timeout))))
     } yield ()
     
@@ -86,7 +115,7 @@ object Cache {
   def delete[F[_]: Sync, K, V](cache: Cache[F, K, V])(k: K): F[Unit] = 
     cache.ref.update(_.-(k))
 
-  def isExpired[A](checkAgainst: TimeSpec, cacheItem: CacheItem[A]): Boolean = {
+  private def isExpired[A](checkAgainst: TimeSpec, cacheItem: CacheItem[A]): Boolean = {
     cacheItem.itemExpiration.fold(false){
       case e if e.nanos < checkAgainst.nanos => true
       case _ => false
@@ -113,8 +142,10 @@ object Cache {
     * 
     * The function will eagerly delete the item from the cache if it is expired.
     **/
-  def lookup[F[_]: Sync : Timer, K, V](k: K, c: Cache[F, K, V]): F[Option[CacheItem[V]]] = 
-    Timer[F].clockMonotonic(NANOSECONDS).flatMap(now => lookupItemT(true, k, c, TimeSpec(now)))
+  def lookup[F[_]: Sync : Timer, K, V](c: Cache[F, K, V])(k: K): F[Option[V]] = 
+    Timer[F].clockMonotonic(NANOSECONDS)
+      .flatMap(now => lookupItemT(true, k, c, TimeSpec.fromNanos(now)))
+      .map(_.map(_.item))
 
   /**
     * Lookup an item with the given key, but don't delete it if it is expired.
@@ -123,8 +154,10 @@ object Cache {
     *
     * The function will not delete the item from the cache.
     **/
-  def lookupNoUpdate[F[_]: Sync: Timer, K, V](k: K, c: Cache[F, K, V]): F[Option[CacheItem[V]]] = 
-    Timer[F].clockMonotonic(NANOSECONDS).flatMap(now => lookupItemT(false, k, c, TimeSpec(now)))
+  def lookupNoUpdate[F[_]: Sync: Timer, K, V](c: Cache[F, K, V])(k: K): F[Option[V]] = 
+    Timer[F].clockMonotonic(NANOSECONDS)
+      .flatMap(now => lookupItemT(false, k, c, TimeSpec.fromNanos(now)))
+      .map(_.map(_.item))
 
   /**
     * Delete all items that are expired.
@@ -133,7 +166,7 @@ object Cache {
     for {
       l <- keys(c)
       now <- Timer[F].clockMonotonic(NANOSECONDS)
-      _ <- l.traverse_(k => lookupItemT(true, k,c, TimeSpec(now)))
+      _ <- l.traverse_(k => lookupItemT(true, k,c, TimeSpec.fromNanos(now)))
     } yield ()
 
 
