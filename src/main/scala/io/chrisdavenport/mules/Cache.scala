@@ -100,7 +100,7 @@ object Cache {
     for {
       now <- Timer[F].clockMonotonic(NANOSECONDS)
       timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
-      _ <- cache.ref.update(_.+((k -> CacheItem[V](v, timeout))))
+      _ <- cache.ref.update(_.+=((k -> CacheItem[V](v, timeout))))
     } yield ()
     
 
@@ -120,7 +120,7 @@ object Cache {
     * Delete an item from the cache. Won't do anything if the item is not present.
     **/
   def delete[F[_]: Sync, K, V](cache: Cache[F, K, V])(k: K): F[Unit] = 
-    cache.ref.update(_.-(k))
+    cache.ref.update(_.-=(k))
 
   private def isExpired[A](checkAgainst: TimeSpec, cacheItem: CacheItem[A]): Boolean = {
     cacheItem.itemExpiration.fold(false){
@@ -173,7 +173,7 @@ object Cache {
     **/
   def purgeExpired[F[_]: Sync: Timer, K, V](c: Cache[F, K, V]): F[Unit] = {
     def purgeKeyIfExpired(m: Map[K, CacheItem[V]], k: K, checkAgainst: TimeSpec): Unit = 
-      m.get(k).fold(())(item => if (isExpired(checkAgainst, item)) {m.-(k); ()} else ())
+      m.get(k).fold(())(item => if (isExpired(checkAgainst, item)) {m.-=(k); ()} else ())
     for {
       now <- Timer[F].clockMonotonic(NANOSECONDS)
       _ <- c.ref.update(m => {m.keys.toList.map(k => purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now))); m}) // One Big Transactional Change
