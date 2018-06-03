@@ -161,6 +161,8 @@ object Cache {
 
   /**
     * Delete all items that are expired.
+    *
+    * This is one big atomic operation.
     **/
   def purgeExpired[F[_]: Sync: Timer, K, V](c: Cache[F, K, V]): F[Unit] = {
     def purgeKeyIfExpired(m: Map[K, CacheItem[V]], k: K, checkAgainst: TimeSpec): Unit = 
@@ -171,8 +173,5 @@ object Cache {
       _ <- c.ref.update(m => {l.map(k => purgeKeyIfExpired(m, k, TimeSpec.fromNanos(now))); m}) // One Big Transactional Change
     } yield ()
   }
-
-  
-
 
 }
