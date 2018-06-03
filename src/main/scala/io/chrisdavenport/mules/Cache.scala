@@ -175,9 +175,8 @@ object Cache {
     def purgeKeyIfExpired(m: Map[K, CacheItem[V]], k: K, checkAgainst: TimeSpec): Unit = 
       m.get(k).fold(())(item => if (isExpired(checkAgainst, item)) {m.-(k); ()} else ())
     for {
-      l <- keys(c)
       now <- Timer[F].clockMonotonic(NANOSECONDS)
-      _ <- c.ref.update(m => {l.map(k => purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now))); m}) // One Big Transactional Change
+      _ <- c.ref.update(m => {m.keys.toList.map(k => purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now))); m}) // One Big Transactional Change
     } yield ()
   }
 
