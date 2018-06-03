@@ -1,6 +1,6 @@
 package io.chrisdavenport.mules
 
-// import cats._
+import cats._
 import cats.data.OptionT
 import cats.effect.{Sync, Timer}
 import cats.effect.concurrent.Ref
@@ -9,7 +9,7 @@ import scala.concurrent.duration._
 import scala.collection.mutable.Map
 
 class Cache[F[_], K, V] private[Cache] (
-  private[Cache] val ref: Ref[F, Map[K, Cache.CacheItem[V]]], 
+  private val ref: Ref[F, Map[K, Cache.CacheItem[V]]], 
   val defaultExpiration: Option[Cache.TimeSpec]
 ){
   // Lookups
@@ -39,14 +39,21 @@ object Cache {
     val nanos: Long
   ) extends AnyVal
   object TimeSpec {
-    def fromDuration(duration: FiniteDuration): TimeSpec = 
+
+    def fromDuration(duration: FiniteDuration): Option[TimeSpec] =
+      Alternative[Option].guard(duration > 0.nanos).as(unsafeFromDuration(duration))
+
+    def unsafeFromDuration(duration: FiniteDuration): TimeSpec = 
       new TimeSpec(duration.toNanos)
 
-    def fromNanos(l: Long): TimeSpec =
+    def fromNanos(l: Long): Option[TimeSpec] = 
+      Alternative[Option].guard(l > 0).as(unsafeFromNanos(l))
+    
+    def unsafeFromNanos(l: Long): TimeSpec =
       new TimeSpec(l)
 
   }
-  private[Cache] case class CacheItem[A](
+  private case class CacheItem[A](
     item: A,
     itemExpiration: Option[TimeSpec]
   )
@@ -92,7 +99,7 @@ object Cache {
   def insertWithTimeout[F[_]: Sync: Timer, K, V](cache: Cache[F, K, V])(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit] =
     for {
       now <- Timer[F].clockMonotonic(NANOSECONDS)
-      timeout = optionTimeout.map(ts => TimeSpec.fromNanos(now + ts.nanos))
+      timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
       _ <- cache.ref.update(_.+((k -> CacheItem[V](v, timeout))))
     } yield ()
     
@@ -144,7 +151,7 @@ object Cache {
     **/
   def lookup[F[_]: Sync : Timer, K, V](c: Cache[F, K, V])(k: K): F[Option[V]] = 
     Timer[F].clockMonotonic(NANOSECONDS)
-      .flatMap(now => lookupItemT(true, k, c, TimeSpec.fromNanos(now)))
+      .flatMap(now => lookupItemT(true, k, c, TimeSpec.unsafeFromNanos(now)))
       .map(_.map(_.item))
 
   /**
@@ -156,7 +163,7 @@ object Cache {
     **/
   def lookupNoUpdate[F[_]: Sync: Timer, K, V](c: Cache[F, K, V])(k: K): F[Option[V]] = 
     Timer[F].clockMonotonic(NANOSECONDS)
-      .flatMap(now => lookupItemT(false, k, c, TimeSpec.fromNanos(now)))
+      .flatMap(now => lookupItemT(false, k, c, TimeSpec.unsafeFromNanos(now)))
       .map(_.map(_.item))
 
   /**
@@ -170,7 +177,7 @@ object Cache {
     for {
       l <- keys(c)
       now <- Timer[F].clockMonotonic(NANOSECONDS)
-      _ <- c.ref.update(m => {l.map(k => purgeKeyIfExpired(m, k, TimeSpec.fromNanos(now))); m}) // One Big Transactional Change
+      _ <- c.ref.update(m => {l.map(k => purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now))); m}) // One Big Transactional Change
     } yield ()
   }
 
