@@ -13,23 +13,68 @@ class Cache[F[_], K, V] private[Cache] (
   val defaultExpiration: Option[Cache.TimeSpec]
 ){
   // Lookups
+
+  /**
+    * Lookup an item with the given key, and delete it if it is expired.
+    * 
+    * The function will only return a value if it is present in the cache and if the item is not expired.
+    * 
+    * The function will eagerly delete the item from the cache if it is expired.
+    **/
   def lookup(k: K)(implicit F: Sync[F], T: Timer[F]): F[Option[V]] =
     Cache.lookup(this)(k)
+
+  /**
+    * Lookup an item with the given key, but don't delete it if it is expired.
+    *
+    * The function will only return a value if it is present in the cache and if the item is not expired.
+    *
+    * The function will not delete the item from the cache.
+    **/
   def lookupNoUpdate(k: K)(implicit F: Sync[F], T: Timer[F]): F[Option[V]] =
     Cache.lookupNoUpdate(this)(k)
 
   // Inserting
+
+  /**
+    * Insert an item in the cache, using the default expiration value of the cache.
+    */
   def insert(k: K, v: V)(implicit F: Sync[F], T: Timer[F]): F[Unit] = 
     Cache.insert(this)(k, v)
+
+  /**
+    * Insert an item in the cache, with an explicit expiration value.
+    *
+    * If the expiration value is None, the item will never expire. The default expiration value of the cache is ignored.
+    * 
+    * The expiration value is relative to the current clockMonotonic time, i.e. it will be automatically added to the result of clockMonotonic for the supplied unit.
+    **/
   def insertWithTimeout(timeout: Option[Cache.TimeSpec])(k: K, v: V)(implicit F: Sync[F], T: Timer[F]) =
     Cache.insertWithTimeout(this)(timeout)(k, v)
 
   // Deleting
+  /**
+    * Delete an item from the cache. Won't do anything if the item is not present.
+    **/
   def delete(k: K)(implicit F: Sync[F]): F[Unit] = Cache.delete(this)(k)
+
+  /**
+    * Delete all items that are expired.
+    *
+    * This is one big atomic operation.
+    **/
   def purgeExpired(implicit F: Sync[F], T: Timer[F]) = Cache.purgeExpired(this)
 
   // Informational
+
+  /**
+    * Return the size of the cache, including expired items.
+    **/
   def size(implicit F: Sync[F]): F[Int] = Cache.size(this)
+
+  /**
+    * Return all keys present in the cache.
+    **/
   def keys(implicit F: Sync[F]): F[List[K]] = Cache.keys(this)
 }
 

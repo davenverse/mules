@@ -1,3 +1,4 @@
+/**
 package io.chrisdavneport.mules
 
 import cats._
@@ -51,3 +52,4 @@ object BasicCache {
 
 
 }
+**/
