@@ -10,10 +10,6 @@ import cats.implicits._
 import scala.concurrent.duration._
 import scala.collection.immutable.Map
 
-// trait Cache[F]{
-  
-// }
-
 class Cache[F[_], K, V] private[Cache] (
   private val ref: Ref[F, Map[K, Cache.CacheItem[V]]], 
   val defaultExpiration: Option[Cache.TimeSpec]
@@ -79,7 +75,7 @@ class Cache[F[_], K, V] private[Cache] (
   def size(implicit F: Sync[F]): F[Int] = Cache.size(this)
 
   /**
-    * Return all keys present in the cache.
+    * Return all keys present in the cache, including expired items.
     **/
   def keys(implicit F: Sync[F]): F[List[K]] = Cache.keys(this)
 }
@@ -121,7 +117,8 @@ object Cache {
     refOf[F, Map[K, CacheItem[V]]](Map.empty[K, CacheItem[V]]).map(new Cache[F, K, V](_, defaultExpiration))
 
   /**
-    * Change the default expiration value of newly added cache items.
+    * Change the default expiration value of newly added cache items. Shares an underlying reference
+    * with the other cache. Use copyCache if you want different caches.
     **/
   def setDefaultExpiration[F[_], K, V](cache: Cache[F, K, V], defaultExpiration: Option[TimeSpec]): Cache[F, K, V] = 
     new Cache[F, K, V](cache.ref, defaultExpiration)
@@ -152,7 +149,7 @@ object Cache {
     for {
       now <- Timer[F].clockMonotonic(NANOSECONDS)
       timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
-      _ <- cache.ref.modify(m => m + ((k -> CacheItem[V](v, timeout))))
+      _ <- cache.ref.modify(m => m + (k -> CacheItem[V](v, timeout)))
     } yield ()
     
 
@@ -184,6 +181,12 @@ object Cache {
   private def lookupItemSimple[F[_]: Sync, K, V](k: K, c: Cache[F, K, V]): F[Option[CacheItem[V]]] = 
     c.ref.get.map(_.get(k))
 
+
+  /**
+    * Internal Function Used for Lookup and management of values.
+    * If isExpired and The boolean for delete is present then we delete,
+    * otherwise return the value.
+    **/
   private def lookupItemT[F[_]: Sync, K, V](del: Boolean, k: K, c: Cache[F, K, V], t: TimeSpec): F[Option[CacheItem[V]]] = {
     val optionT = for {
       i <- OptionT(lookupItemSimple(k, c))
