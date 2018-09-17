@@ -4,8 +4,9 @@ lazy val core = project.in(file("."))
       name := "mules"
     )
 
-val catsV = "1.1.0"
-val catsEffectV = "1.0.0-RC2"
+val catsV = "1.4.0"
+val catsEffectV = "0.10.1"
+val fs2V = "0.10.6"
 
 val specs2V = "4.2.0"
 val disciplineV = "0.8"
@@ -28,6 +29,7 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
+    "co.fs2"                      %% "fs2-core"                   % fs2V,
 
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
