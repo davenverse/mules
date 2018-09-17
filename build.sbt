@@ -9,7 +9,7 @@ val catsEffectV = "0.10.1"
 val fs2V = "0.10.6"
 
 val specs2V = "4.2.0"
-val disciplineV = "0.8"
+val disciplineV = "0.10.0"
 val scShapelessV = "1.1.6"
 
 
