@@ -3,10 +3,12 @@ package io.chrisdavenport.mules
 import cats._
 import cats.data.OptionT
 import cats.effect.{Sync, Timer}
-import cats.effect.concurrent.Ref
+import fs2.async._
+// For Cats-effect 1.0
+// import cats.effect.concurrent.Ref
 import cats.implicits._
 import scala.concurrent.duration._
-import scala.collection.mutable.Map
+import scala.collection.immutable.Map
 
 class Cache[F[_], K, V] private[Cache] (
   private val ref: Ref[F, Map[K, Cache.CacheItem[V]]], 
@@ -73,7 +75,7 @@ class Cache[F[_], K, V] private[Cache] (
   def size(implicit F: Sync[F]): F[Int] = Cache.size(this)
 
   /**
-    * Return all keys present in the cache.
+    * Return all keys present in the cache, including expired items.
     **/
   def keys(implicit F: Sync[F]): F[List[K]] = Cache.keys(this)
 }
@@ -111,10 +113,12 @@ object Cache {
     * If the specified default expiration value is None, items inserted by insert will never expire.
     **/
   def createCache[F[_]: Sync, K, V](defaultExpiration: Option[TimeSpec]): F[Cache[F, K, V]] = 
-    Ref.of[F, Map[K, CacheItem[V]]](Map.empty[K, CacheItem[V]]).map(new Cache[F, K, V](_, defaultExpiration))
+    // Cats-Effect 1.0 Ref.of
+    refOf[F, Map[K, CacheItem[V]]](Map.empty[K, CacheItem[V]]).map(new Cache[F, K, V](_, defaultExpiration))
 
   /**
-    * Change the default expiration value of newly added cache items.
+    * Change the default expiration value of newly added cache items. Shares an underlying reference
+    * with the other cache. Use copyCache if you want different caches.
     **/
   def setDefaultExpiration[F[_], K, V](cache: Cache[F, K, V], defaultExpiration: Option[TimeSpec]): Cache[F, K, V] = 
     new Cache[F, K, V](cache.ref, defaultExpiration)
@@ -124,7 +128,7 @@ object Cache {
     **/ 
   def copyCache[F[_]: Sync, K, V](cache: Cache[F, K, V]): F[Cache[F, K, V]] = for {
     current <- cache.ref.get
-    ref <- Ref.of[F, Map[K, CacheItem[V]]](current)
+    ref <- refOf[F, Map[K, CacheItem[V]]](current)
   } yield new Cache[F, K, V](ref, cache.defaultExpiration)
 
 
@@ -145,7 +149,7 @@ object Cache {
     for {
       now <- Timer[F].clockMonotonic(NANOSECONDS)
       timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
-      _ <- cache.ref.update(_.+=((k -> CacheItem[V](v, timeout))))
+      _ <- cache.ref.modify(m => m + (k -> CacheItem[V](v, timeout)))
     } yield ()
     
 
@@ -156,7 +160,7 @@ object Cache {
     cache.ref.get.map(_.size)
 
   /**
-    * Return all keys present in the cache.
+    * Return all keys present in the cache, including expired items.
     **/
   def keys[F[_]: Sync, K, V](cache: Cache[F, K, V]): F[List[K]] = 
     cache.ref.get.map(_.keys.toList)
@@ -165,7 +169,7 @@ object Cache {
     * Delete an item from the cache. Won't do anything if the item is not present.
     **/
   def delete[F[_]: Sync, K, V](cache: Cache[F, K, V])(k: K): F[Unit] = 
-    cache.ref.update(_.-=(k))
+    cache.ref.modify(m => m - (k)).void
 
   private def isExpired[A](checkAgainst: TimeSpec, cacheItem: CacheItem[A]): Boolean = {
     cacheItem.itemExpiration.fold(false){
@@ -177,6 +181,12 @@ object Cache {
   private def lookupItemSimple[F[_]: Sync, K, V](k: K, c: Cache[F, K, V]): F[Option[CacheItem[V]]] = 
     c.ref.get.map(_.get(k))
 
+
+  /**
+    * Internal Function Used for Lookup and management of values.
+    * If isExpired and The boolean for delete is present then we delete,
+    * otherwise return the value.
+    **/
   private def lookupItemT[F[_]: Sync, K, V](del: Boolean, k: K, c: Cache[F, K, V], t: TimeSpec): F[Option[CacheItem[V]]] = {
     val optionT = for {
       i <- OptionT(lookupItemSimple(k, c))
@@ -217,11 +227,12 @@ object Cache {
     * This is one big atomic operation.
     **/
   def purgeExpired[F[_]: Sync: Timer, K, V](c: Cache[F, K, V]): F[Unit] = {
-    def purgeKeyIfExpired(m: Map[K, CacheItem[V]], k: K, checkAgainst: TimeSpec): Unit = 
-      m.get(k).fold(())(item => if (isExpired(checkAgainst, item)) {m.-=(k); ()} else ())
+    def purgeKeyIfExpired(m: Map[K, CacheItem[V]], k: K, checkAgainst: TimeSpec): Map[K, CacheItem[V]] = 
+      m.get(k).fold(m)({item => if (isExpired(checkAgainst, item)) {m - (k) } else m})
+
     for {
       now <- Timer[F].clockMonotonic(NANOSECONDS)
-      _ <- c.ref.update(m => {m.keys.toList.map(k => purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now))); m}) // One Big Transactional Change
+      _ <- c.ref.modify(m => {m.keys.toList.foldLeft(m)((m, k) => purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now)))}) // One Big Transactional Change
     } yield ()
   }
 
