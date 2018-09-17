@@ -160,7 +160,7 @@ object Cache {
     cache.ref.get.map(_.size)
 
   /**
-    * Return all keys present in the cache.
+    * Return all keys present in the cache, including expired items.
     **/
   def keys[F[_]: Sync, K, V](cache: Cache[F, K, V]): F[List[K]] = 
     cache.ref.get.map(_.keys.toList)
