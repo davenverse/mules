@@ -1,4 +1,4 @@
-# mules [![Build Status](https://travis-ci.com/ChristopherDavenport/mules.svg?branch=master)](https://travis-ci.com/ChristopherDavenport/mules)
+# mules [![Build Status](https://travis-ci.com/ChristopherDavenport/mules.svg?branch=master)](https://travis-ci.com/ChristopherDavenport/mules) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.chrisdavenport/mules_2.12/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.chrisdavenport/mules_2.12)
 
 Caches are tricky - Let Mules Haul its Weight.
 
