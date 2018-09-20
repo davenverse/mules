@@ -5,9 +5,11 @@ import scala.concurrent.duration._
 import cats.effect._
 // import cats.effect.implicits._
 import cats.effect.IO
-import scala.concurrent.ExecutionContext.Implicits.global
+import cats.effect.laws.util.TestContext
 
 class CacheSpec extends Specification {
+  val ctx = TestContext()
+  implicit val testTimer: Timer[IO] = ctx.timer[IO]
 
   "Cache" should {
     "get a value in a quicker period than the timeout" in {
@@ -33,7 +35,7 @@ class CacheSpec extends Specification {
       val setup = for {
         cache <- Cache.createCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
-        _ <- Sync[IO].delay(Thread.sleep(2000))
+        _ <- Sync[IO].delay(ctx.tick(2.seconds))
         _ <- cache.purgeExpired
         value <- cache.lookupNoUpdate("Foo")
       } yield value
@@ -44,7 +46,7 @@ class CacheSpec extends Specification {
       val setup = for {
         cache <- Cache.createCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
-        _ <- Sync[IO].delay(Thread.sleep(2000))
+        _ <- Sync[IO].delay(ctx.tick(2.seconds))
         value <- cache.lookup("Foo")
       } yield value
       setup.unsafeRunSync must_=== None
