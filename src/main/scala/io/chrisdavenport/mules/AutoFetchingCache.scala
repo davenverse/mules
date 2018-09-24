@@ -1,7 +1,9 @@
 package io.chrisdavenport.mules
 
+import cats.Monad
 import cats.effect._
 import cats.effect.concurrent.Ref
+import cats.instances.list._
 import cats.instances.option._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
@@ -65,14 +67,34 @@ object AutoFetchingCache {
   /**
     * Delete an item from the cache. Won't do anything if the item is not present.
     **/
-  def delete[F[_] : Sync, K, V](cache: AutoFetchingCache[F, K, V])(k: K): F[Unit] =
-    cache.values.update(m => m - k).void
+  def delete[F[_], K, V](cache: AutoFetchingCache[F, K, V])(k: K)
+                        (implicit S: Sync[F]): F[Unit] =
+    cache.values.modify(m =>
+      (m - k, m.get(k) match {
+        case Some(Fetching(f)) => f.cancel
+        case _ => S.unit
+      })) >> cache.reload.traverse { case (_, values) =>
+      values.modify(m => (m - k,
+        m.get(k) match {
+          case Some(f) => f.cancel
+          case None => S.unit
+        }
+      ))
+    }.void
 
+
+
+  def cancelReloads[F[_] : Monad, K, V](cache: AutoFetchingCache[F, K, V]): F[Unit] =
+    cache.reload.map { case (_, values) =>
+      values.modify(m => (Map.empty,
+        m.values.toList.traverse[F, Unit](_.cancel).void)
+      ).flatten
+    } getOrElse Monad[F].unit
 
   /**
     * Insert an item in the cache, using the default expiration value of the cache.
     */
-  def insert[F[_] : Sync : Timer, K, V](cache: AutoFetchingCache[F, K, V])(k: K, v: V): F[Unit] =
+  private def insert[F[_] : Sync : Timer, K, V](cache: AutoFetchingCache[F, K, V])(k: K, v: V): F[Unit] =
     insertWithTimeout(cache)(cache.defaultExpiration)(k, v)
 
 
@@ -133,11 +155,11 @@ object AutoFetchingCache {
 
 
         val go: F[Unit] = reloads.get.map(_.contains(k)) >>= { alreadySetup =>
-            if (alreadySetup) C.unit
-            else C.start(loop()) // just in case a loop has already started we check the previous value
-              .map(f => reloads.modify(m => (m + (k -> f), m.get(k)))).flatten
-              .flatMap(fOpt => fOpt.map(_.cancel).getOrElse(C.unit))
-          }
+          if (alreadySetup) C.unit
+          else C.start(loop()) // just in case a loop has already started we check the previous value
+            .map(f => reloads.modify(m => (m + (k -> f), m.get(k)))).flatten
+            .flatMap(fOpt => fOpt.map(_.cancel).getOrElse(C.unit))
+        }
 
         go
     } getOrElse C.unit
