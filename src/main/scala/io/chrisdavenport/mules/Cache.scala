@@ -11,7 +11,7 @@ import scala.collection.immutable.Map
 
 class Cache[F[_], K, V] private[Cache] (
   private val ref: Ref[F, Map[K, Cache.CacheItem[V]]], 
-  val defaultExpiration: Option[Cache.TimeSpec]
+  val defaultExpiration: Option[TimeSpec]
 ){
   // Lookups
 
@@ -50,7 +50,7 @@ class Cache[F[_], K, V] private[Cache] (
     * 
     * The expiration value is relative to the current clockMonotonic time, i.e. it will be automatically added to the result of clockMonotonic for the supplied unit.
     **/
-  def insertWithTimeout(timeout: Option[Cache.TimeSpec])(k: K, v: V)(implicit F: Sync[F], C: Clock[F]) =
+  def insertWithTimeout(timeout: Option[TimeSpec])(k: K, v: V)(implicit F: Sync[F], C: Clock[F]) =
     Cache.insertWithTimeout(this)(timeout)(k, v)
 
   // Deleting
@@ -80,25 +80,7 @@ class Cache[F[_], K, V] private[Cache] (
 }
 
 object Cache {
-  // Value of Time In Nanoseconds
-  class TimeSpec private (
-    val nanos: Long
-  ) extends AnyVal
-  object TimeSpec {
 
-    def fromDuration(duration: FiniteDuration): Option[TimeSpec] =
-      Alternative[Option].guard(duration > 0.nanos).as(unsafeFromDuration(duration))
-
-    def unsafeFromDuration(duration: FiniteDuration): TimeSpec = 
-      new TimeSpec(duration.toNanos)
-
-    def fromNanos(l: Long): Option[TimeSpec] = 
-      Alternative[Option].guard(l > 0).as(unsafeFromNanos(l))
-    
-    def unsafeFromNanos(l: Long): TimeSpec =
-      new TimeSpec(l)
-
-  }
   private case class CacheItem[A](
     item: A,
     itemExpiration: Option[TimeSpec]
