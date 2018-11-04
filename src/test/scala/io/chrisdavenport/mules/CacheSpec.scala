@@ -14,7 +14,7 @@ class CacheSpec extends Specification {
   "Cache" should {
     "get a value in a quicker period than the timeout" in {
       val setup = for {
-        cache <- Cache.createCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
+        cache <- Cache.createCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
         value <- cache.lookup("Foo")
       } yield value
@@ -33,7 +33,7 @@ class CacheSpec extends Specification {
 
     "Remove a value in mass delete" in {
       val setup = for {
-        cache <- Cache.createCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
+        cache <- Cache.createCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
         _ <- Sync[IO].delay(ctx.tick(2.seconds))
         _ <- cache.purgeExpired
@@ -44,7 +44,7 @@ class CacheSpec extends Specification {
 
     "Lookup after interval fails to get a value" in {
       val setup = for {
-        cache <- Cache.createCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
+        cache <- Cache.createCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
         _ <- Sync[IO].delay(ctx.tick(2.seconds))
         value <- cache.lookup("Foo")

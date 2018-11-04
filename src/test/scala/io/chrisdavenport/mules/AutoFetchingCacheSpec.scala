@@ -3,7 +3,7 @@ package io.chrisdavenport.mules
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.syntax.functor._
-import io.chrisdavenport.mules.Cache.TimeSpec
+import io.chrisdavenport.mules.AutoFetchingCache.Refresh
 import org.specs2.mutable.Specification
 
 import scala.concurrent.ExecutionContext
@@ -51,7 +51,7 @@ class AutoFetchingCacheSpec extends Specification {
       val setup = for {
         count <- Ref.of[IO, Int](0)
 
-        cache <- AutoFetchingCache.createCache[IO, String, Int](None, Some(TimeSpec.unsafeFromDuration(500.milliseconds)))(_ =>
+        cache <- AutoFetchingCache.createCache[IO, String, Int](None, Some(Refresh.Config(TimeSpec.unsafeFromDuration(500.milliseconds))))(_ =>
           count.update( _ + 1).as(1)
         )
         _ <- cache.lookup("Foo")

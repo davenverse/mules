@@ -1,6 +1,5 @@
 package io.chrisdavenport.mules
 
-import cats._
 import cats.data.OptionT
 import cats.effect.{Sync, Clock}
 // For Cats-effect 1.0
