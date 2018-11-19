@@ -5,7 +5,7 @@ lazy val core = project.in(file("."))
     )
 
 val catsV = "1.4.0"
-val catsEffectV = "1.0.0"
+val catsEffectV = "1.1.0-M1"
 
 val specs2V = "4.3.5"
 val disciplineV = "0.10.0"
@@ -20,13 +20,13 @@ lazy val contributors = Seq(
 lazy val commonSettings = Seq(
   organization := "io.chrisdavenport",
 
-  scalaVersion := "2.12.6",
+  scalaVersion := "2.12.7",
   crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
 
   scalacOptions += "-Yrangepos",
 
   addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.8" cross CrossVersion.binary),
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
+  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.0-M2"),
 
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
