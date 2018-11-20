@@ -10,17 +10,12 @@ import scala.concurrent.duration._
 
 class AutoCacheSpec extends Specification {
 
-  val ctx = TestContext()
-  implicit val cs: ContextShift[IO] = IO.contextShift(ctx)
-  implicit val timer: Timer[IO] = ctx.timer[IO]
-  implicit val clock: Clock[IO] = timer.clock
-
   val cacheKeyExpiration    = TimeSpec.unsafeFromDuration(12.hours)
   val checkExpirationsEvery = TimeSpec.unsafeFromDuration(10.millis)
 
   "Auto Cache" should {
 
-    "expire keys" in {
+    "expire keys" in WithTestContext { ctx => implicit cs => implicit timer => implicit clock =>
       val spec =
         for {
           cache <- Cache.createAutoCache[IO, Int, String](cacheKeyExpiration, checkExpirationsEvery)
@@ -44,7 +39,7 @@ class AutoCacheSpec extends Specification {
       spec.as(1).unsafeRunSync() must_== 1
     }
 
-    "resets expiration" in {
+    "resets expiration" in WithTestContext { ctx => implicit cs => implicit timer => implicit clock =>
       val spec =
         for {
           cache <- Cache.createAutoCache[IO, Int, String](cacheKeyExpiration, checkExpirationsEvery)
@@ -63,6 +58,18 @@ class AutoCacheSpec extends Specification {
       spec.as(1).unsafeRunSync() must_== 1
     }
 
+  }
+
+}
+
+object WithTestContext {
+
+  def apply[A](f: TestContext => ContextShift[IO] => Timer[IO] => Clock[IO] => A): A = {
+    val ctx = TestContext()
+    implicit val cs: ContextShift[IO] = IO.contextShift(ctx)
+    implicit val timer: Timer[IO] = ctx.timer[IO]
+    implicit val clock: Clock[IO] = timer.clock
+    f(ctx)(cs)(timer)(clock)
   }
 
 }
