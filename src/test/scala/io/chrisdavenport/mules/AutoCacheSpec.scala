@@ -66,9 +66,9 @@ object WithTestContext {
 
   def apply[A](f: TestContext => ContextShift[IO] => Timer[IO] => Clock[IO] => A): A = {
     val ctx = TestContext()
-    implicit val cs: ContextShift[IO] = IO.contextShift(ctx)
-    implicit val timer: Timer[IO] = ctx.timer[IO]
-    implicit val clock: Clock[IO] = timer.clock
+    val cs: ContextShift[IO] = IO.contextShift(ctx)
+    val timer: Timer[IO] = ctx.timer[IO]
+    val clock: Clock[IO] = timer.clock
     f(ctx)(cs)(timer)(clock)
   }
 
