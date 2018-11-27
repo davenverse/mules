@@ -127,7 +127,7 @@ object Cache {
         checkOnExpirationsEvery: TimeSpec
    ): F[Cache[F, K, V]] = {
       def runExpiration(cache: Cache[F, K, V]): F[Unit] =
-        Timer[F].sleep(checkOnExpirationsEvery.toDuration) >> purgeExpired(cache) >> runExpiration(cache)
+        implicitly[Timer[F]].sleep(checkOnExpirationsEvery.toDuration) >> purgeExpired(cache) >> runExpiration(cache)
 
       Ref.of[F, Map[K, CacheItem[V]]](Map.empty[K, CacheItem[V]])
         .map(ref => new Cache[F, K, V](ref, Some(expiresIn)))
