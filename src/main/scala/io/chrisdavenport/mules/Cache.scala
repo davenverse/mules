@@ -84,8 +84,8 @@ class Cache[F[_], K, V] private[Cache] (
 
 object Cache {
   // Value of Time In Nanoseconds
-  case class TimeSpec private (
-    nanos: Long
+  class TimeSpec private (
+    val nanos: Long
   ) extends AnyVal
   object TimeSpec {
 
