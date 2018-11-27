@@ -101,10 +101,8 @@ object Cache {
     def unsafeFromNanos(l: Long): TimeSpec =
       new TimeSpec(l)
 
-    implicit class TimeSpecOps(val timeSpec: TimeSpec) {
-      def toDuration: FiniteDuration =
-        Duration(timeSpec.nanos, TimeUnit.NANOSECONDS)
-    }
+    def toDuration(timeSpec: TimeSpec): FiniteDuration =
+      Duration(timeSpec.nanos, TimeUnit.NANOSECONDS)
 
   }
   private case class CacheItem[A](
@@ -126,8 +124,10 @@ object Cache {
         expiresIn: TimeSpec,
         checkOnExpirationsEvery: TimeSpec
    ): F[Cache[F, K, V]] = {
-      def runExpiration(cache: Cache[F, K, V]): F[Unit] =
-        implicitly[Timer[F]].sleep(checkOnExpirationsEvery.toDuration) >> purgeExpired(cache) >> runExpiration(cache)
+      def runExpiration(cache: Cache[F, K, V]): F[Unit] = {
+        val check = TimeSpec.toDuration(checkOnExpirationsEvery)
+        implicitly[Timer[F]].sleep(check) >> purgeExpired(cache) >> runExpiration(cache)
+      }
 
       Ref.of[F, Map[K, CacheItem[V]]](Map.empty[K, CacheItem[V]])
         .map(ref => new Cache[F, K, V](ref, Some(expiresIn)))
