@@ -1,9 +1,10 @@
 package io.chrisdavenport.mules
 
 import cats.data.OptionT
-import cats.effect.{Sync, Clock}
+import cats.effect._
 // For Cats-effect 1.0
 import cats.effect.concurrent.Ref
+import cats.effect.syntax.concurrent._
 import cats.implicits._
 import scala.concurrent.duration._
 import scala.collection.immutable.Map
@@ -79,11 +80,34 @@ final class Cache[F[_], K, V] private[Cache] (
 }
 
 object Cache {
-
   private case class CacheItem[A](
     item: A,
     itemExpiration: Option[TimeSpec]
   )
+
+  /**
+     * Creates a new cache with default expiration and automatic key-expiration support.
+    *
+    * It fires off a background process that checks for expirations every certain amount of time.
+    *
+    * @param expiresIn: the expiration time of every key-value in the Cache.
+    * @param checkOnExpirationsEvery: how often the expiration process should check for expired keys.
+    *
+    * @return an `[F[Cache[F, K, V]]` that will create a Cache with key-expiration support when evaluated.
+    * */
+    def createAutoCache[F[_]: Clock: Concurrent: Timer, K, V](
+        expiresIn: TimeSpec,
+        checkOnExpirationsEvery: TimeSpec
+   ): F[Cache[F, K, V]] = {
+      def runExpiration(cache: Cache[F, K, V]): F[Unit] = {
+        val check = TimeSpec.toDuration(checkOnExpirationsEvery)
+        implicitly[Timer[F]].sleep(check) >> purgeExpired(cache) >> runExpiration(cache)
+      }
+
+      Ref.of[F, Map[K, CacheItem[V]]](Map.empty[K, CacheItem[V]])
+        .map(ref => new Cache[F, K, V](ref, Some(expiresIn)))
+        .flatTap(runExpiration(_).start.void)
+     }
 
   /**
     * Create a new cache with a default expiration value for newly added cache items.

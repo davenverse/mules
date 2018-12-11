@@ -1,9 +1,10 @@
 package io.chrisdavenport.mules
 
-import cats.Alternative
-import cats.syntax.functor._
-import cats.instances.option._
 import scala.concurrent.duration._
+import java.util.concurrent.TimeUnit
+import cats._
+import cats.implicits._
+
 // Value of Time In Nanoseconds
 final class TimeSpec private (
                          val nanos: Long
@@ -21,5 +22,8 @@ object TimeSpec {
 
   def unsafeFromNanos(l: Long): TimeSpec =
     new TimeSpec(l)
+
+  def toDuration(timeSpec: TimeSpec): FiniteDuration =
+    Duration(timeSpec.nanos, TimeUnit.NANOSECONDS)
 
 }
