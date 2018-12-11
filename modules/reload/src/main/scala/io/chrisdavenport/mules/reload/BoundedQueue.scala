@@ -1,4 +1,4 @@
-package io.chrisdavenport.mules
+package io.chrisdavenport.mules.reload
 
 import cats.collections.Dequeue
 

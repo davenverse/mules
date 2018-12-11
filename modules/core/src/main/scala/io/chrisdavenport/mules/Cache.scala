@@ -8,7 +8,7 @@ import cats.implicits._
 import scala.concurrent.duration._
 import scala.collection.immutable.Map
 
-class Cache[F[_], K, V] private[Cache] (
+final class Cache[F[_], K, V] private[Cache] (
   private val ref: Ref[F, Map[K, Cache.CacheItem[V]]], 
   val defaultExpiration: Option[TimeSpec]
 ){

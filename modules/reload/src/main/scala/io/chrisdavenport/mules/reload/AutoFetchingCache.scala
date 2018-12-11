@@ -1,15 +1,11 @@
-package io.chrisdavenport.mules
+package io.chrisdavenport.mules.reload
 
 import cats.Monad
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Fiber, Timer, _}
-import cats.instances.list._
-import cats.instances.option._
-import cats.syntax.applicativeError._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
-import cats.syntax.traverse._
-import io.chrisdavenport.mules.AutoFetchingCache.Refresh
+import cats.implicits._
+import io.chrisdavenport.mules._
+import io.chrisdavenport.mules.reload.AutoFetchingCache.Refresh
 
 import scala.collection.immutable.Map
 import scala.concurrent.duration.{Duration, _}
