@@ -5,7 +5,7 @@ import cats.syntax.functor._
 import cats.instances.option._
 import scala.concurrent.duration._
 // Value of Time In Nanoseconds
-class TimeSpec private (
+final class TimeSpec private (
                          val nanos: Long
                        ) extends AnyVal
 object TimeSpec {
