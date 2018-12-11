@@ -1,11 +1,26 @@
-lazy val core = project.in(file("."))
-    .settings(commonSettings, releaseSettings)
-    .settings(
-      name := "mules"
+lazy val mules = project.in(file("."))
+  .settings(commonSettings, releaseSettings, skipOnPublishSettings)
+  .aggregate(core, reload)
+
+lazy val core = project.in(file("modules/core"))
+  .settings(commonSettings, releaseSettings)
+  .settings(
+    name := "mules"
+  )
+
+lazy val reload = project.in(file("modules/reload"))
+  .settings(commonSettings, releaseSettings)
+  .dependsOn(core)
+  .settings(
+    name := "mules-reload",
+    libraryDependencies ++= Seq(
+      "org.typelevel"               %% "cats-collections-core"      % catsCollectionV
     )
+  )
 
 val catsV = "1.5.0"
 val catsEffectV = "1.1.0"
+val catsCollectionV = "0.7.0"
 
 val specs2V = "4.3.5"
 val disciplineV = "0.10.0"
@@ -27,6 +42,7 @@ lazy val commonSettings = Seq(
 
   addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.9" cross CrossVersion.binary),
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
+
 
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
@@ -105,3 +121,11 @@ lazy val releaseSettings = {
     }
   )
 }
+
+lazy val skipOnPublishSettings = Seq(
+  skip in publish := true,
+  publish := (()),
+  publishLocal := (()),
+  publishArtifact := false,
+  publishTo := None
+)

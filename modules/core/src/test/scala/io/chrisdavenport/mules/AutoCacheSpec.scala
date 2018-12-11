@@ -2,8 +2,7 @@ package io.chrisdavenport.mules
 
 import cats.effect.laws.util.TestContext
 import cats.effect.{Clock, ContextShift, IO, Timer}
-import cats.syntax.functor._
-import io.chrisdavenport.mules.Cache.TimeSpec
+import cats.implicits._
 import org.specs2.mutable.Specification
 
 import scala.concurrent.duration._
