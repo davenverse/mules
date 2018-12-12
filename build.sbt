@@ -1,6 +1,6 @@
 lazy val mules = project.in(file("."))
   .settings(commonSettings, releaseSettings, skipOnPublishSettings)
-  .aggregate(core, reload)
+  .aggregate(core, reload, bounded)
 
 lazy val core = project.in(file("modules/core"))
   .settings(commonSettings, releaseSettings)
@@ -13,6 +13,16 @@ lazy val reload = project.in(file("modules/reload"))
   .dependsOn(core)
   .settings(
     name := "mules-reload",
+    libraryDependencies ++= Seq(
+      "org.typelevel"               %% "cats-collections-core"      % catsCollectionV
+    )
+  )
+
+lazy val bounded = project.in(file("modules/bounded"))
+  .settings(commonSettings, releaseSettings)
+  .dependsOn(core)
+  .settings(
+    name := "mules-bounded",
     libraryDependencies ++= Seq(
       "org.typelevel"               %% "cats-collections-core"      % catsCollectionV
     )
