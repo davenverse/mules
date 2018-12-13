@@ -24,6 +24,7 @@ lazy val bounded = project.in(file("modules/bounded"))
   .settings(
     name := "mules-bounded",
     libraryDependencies ++= Seq(
+      "co.fs2" %% "fs2-core" % "1.0.2",
       "org.typelevel"               %% "cats-collections-core"      % catsCollectionV
     )
   )
