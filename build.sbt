@@ -22,7 +22,7 @@ val catsV = "1.5.0"
 val catsEffectV = "1.1.0"
 val catsCollectionV = "0.7.0"
 
-val specs2V = "4.3.5"
+val specs2V = "4.3.6"
 val disciplineV = "0.10.0"
 
 val scShapelessV = "1.1.6"
