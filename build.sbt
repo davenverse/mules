@@ -25,7 +25,7 @@ val catsCollectionV = "0.7.0"
 val specs2V = "4.4.1"
 val disciplineV = "0.11.0"
 
-val scShapelessV = "1.1.6"
+val scShapelessV = "1.1.8"
 
 
 lazy val contributors = Seq(
