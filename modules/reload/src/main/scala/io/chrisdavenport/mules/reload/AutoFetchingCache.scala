@@ -218,7 +218,6 @@ object AutoFetchingCache {
   private def insert[F[_] : Sync : Timer, K, V](cache: AutoFetchingCache[F, K, V])(k: K, v: V): F[Unit] =
     insertWithTimeout(cache)(cache.defaultExpiration)(k, v)
 
-
   /**
     * Insert an item in the cache, with an explicit expiration value.
     *
