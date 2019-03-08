@@ -23,7 +23,7 @@ class AutoFetchingCacheSpec extends Specification {
         cache <- AutoFetchingCache.createCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)), None)(_ =>
           count.update( _ + 1).as(1)
         )
-        value <- cache.lookup("Foo")
+        value <- cache.lookupCurrent("Foo")
         cValue <- count.get
       } yield (cValue, value)
       setup.unsafeRunSync must_=== ((1, 1))
@@ -37,9 +37,9 @@ class AutoFetchingCacheSpec extends Specification {
         cache <- AutoFetchingCache.createCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)), None)(_ =>
           count.update( _ + 1).as(1)
         )
-        _ <- cache.lookup("Foo")
+        _ <- cache.lookupCurrent("Foo")
         _ <- timer.sleep(2.seconds)
-        value <- cache.lookup("Foo")
+        value <- cache.lookupCurrent("Foo")
         cValue <- count.get
 
       } yield (cValue, value)
@@ -54,9 +54,9 @@ class AutoFetchingCacheSpec extends Specification {
         cache <- AutoFetchingCache.createCache[IO, String, Int](None, Some(AutoFetchingCache.RefreshConfig(TimeSpec.unsafeFromDuration(500.milliseconds))))(_ =>
           count.update( _ + 1).as(1)
         )
-        _ <- cache.lookup("Foo")
+        _ <- cache.lookupCurrent("Foo")
         _ <- timer.sleep(2.seconds)
-        value <- cache.lookup("Foo")
+        value <- cache.lookupCurrent("Foo")
         cValue <- count.get
 
       } yield (cValue, value)
