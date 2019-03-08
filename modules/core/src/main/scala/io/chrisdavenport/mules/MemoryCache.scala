@@ -1,6 +1,6 @@
 package io.chrisdavenport.mules
 
-import cats.data.OptionT
+import cats.data._
 import cats.effect._
 // For Cats-effect 1.0
 import cats.effect.concurrent.Ref
@@ -189,12 +189,26 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    * This is one big atomic operation.
    **/
   def purgeExpired: F[Unit] = {
-    def purgeKeyIfExpired(m: Map[K, MemoryCacheItem[V]], k: K, checkAgainst: TimeSpec): Map[K, MemoryCacheItem[V]] = 
-      m.get(k).fold(m)({item => if (isExpired(checkAgainst, item)) {m - (k) } else m})
+    def purgeKeyIfExpired(m: Map[K, MemoryCacheItem[V]], k: K, checkAgainst: TimeSpec): (Map[K, MemoryCacheItem[V]], Option[K]) = 
+      m.get(k)
+        .map(item => 
+          if (isExpired(checkAgainst, item)) ((m - (k)), k.some) 
+          else (m, None)
+        )
+        .getOrElse((m, None))
 
     for {
       now <- C.monotonic(NANOSECONDS)
-      _ <- ref.update(m => {m.keys.toList.foldLeft(m)((m, k) => purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now)))}) // One Big Transactional Change
+      chain <- ref.modify(
+        m => {
+          m.keys.toList
+            .foldLeft((m, Chain.empty[K])){ case ((m, acc), k) => 
+              val (mOut, maybeDeleted) = purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now))
+              maybeDeleted.fold((mOut, acc))(kv => (mOut, acc :+ kv))
+            }
+        }
+      )// One Big Transactional Change
+      _ <- chain.traverse_(onDelete)
     } yield ()
   }
   
