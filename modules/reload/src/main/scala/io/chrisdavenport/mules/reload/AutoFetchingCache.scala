@@ -16,9 +16,12 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
   val defaultExpiration: Option[TimeSpec],
   private val refresh: Option[Refresh[F, K]],
   val fetch: K => F[V]
-) {
+) extends Lookup[F, K, V] {
   import AutoFetchingCache._
 
+  /**
+   * Manually Cancel All Current Reloads
+   */
   def cancelReloads: F[Unit] =
     refresh.fold(Applicative[F].unit)(_.cancelAll)
 
@@ -36,8 +39,8 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
     } yield v
 
   /**
-    * Insert an item in the cache, using the default expiration value of the cache.
-    */
+   * Insert an item in the cache, using the default expiration value of the cache.
+   */
   private def insert(k: K, v: V): F[Unit] =
     insertWithTimeout(defaultExpiration)(k, v)
 
@@ -46,13 +49,12 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
   }
 
   /**
-    * Insert an item in the cache, with an explicit expiration value.
-    *
-    * If the expiration value is None, the item will never expire. The default expiration value of the cache is ignored.
-    *
-    * The expiration value is relative to the current clockMonotonic time, i.e. it will be automatically added to the result of clockMonotonic for the supplied unit.
-    **/
-
+   * Insert an item in the cache, with an explicit expiration value.
+   *
+   * If the expiration value is None, the item will never expire. The default expiration value of the cache is ignored.
+   *
+   * The expiration value is relative to the current clockMonotonic time, i.e. it will be automatically added to the result of clockMonotonic for the supplied unit.
+   **/
   def insertWithTimeout(
     optionTimeout: Option[TimeSpec]
   )(k: K, v: V): F[Unit] = {
@@ -76,7 +78,18 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
   def keys: F[List[K]] =
     values.get.map(_.keys.toList)
 
-  def lookup(k: K): F[V] =
+  /**
+   * Looks Up a Value in the Cache, since this
+   * cache is always populated it will always be
+   * Some.
+   */
+  def lookup(k: K): F[Option[V]] =
+    lookupCurrent(k).map(_.some)
+  
+  /**
+   * This method always returns as is expected.
+   */
+  def lookupCurrent(k: K): F[V] = 
     Timer[F].clock.monotonic(NANOSECONDS)
       .flatMap(now => lookupItemT(k, TimeSpec.unsafeFromNanos(now)))
 
@@ -224,12 +237,12 @@ object AutoFetchingCache {
   }
 
   /**
-    * Create a new cache with a default expiration value for newly added cache items.
-    *
-    * Items that are added to the cache without an explicit expiration value (using insert) will be inserted with the default expiration value.
-    *
-    * If the specified default expiration value is None, items inserted by insert will never expire.
-    **/
+   * Create a new cache with a default expiration value for newly added cache items.
+   *
+   * Items that are added to the cache without an explicit expiration value (using insert) will be inserted with the default expiration value.
+   *
+   * If the specified default expiration value is None, items inserted by insert will never expire.
+   **/
   def createCache[F[_] : Concurrent : Timer, K, V](
     defaultExpiration: Option[TimeSpec],
     refreshConfig: Option[RefreshConfig]
