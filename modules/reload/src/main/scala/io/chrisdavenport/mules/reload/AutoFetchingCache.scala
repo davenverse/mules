@@ -158,16 +158,10 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
 
 object AutoFetchingCache {
 
-  sealed trait Refresh[F[_], K] {
+  private sealed trait Refresh[F[_], K] {
     def period: TimeSpec
 
     def cancelAll: F[Unit]
-  }
-  object Refresh {
-    final case class Config(
-      period: TimeSpec,
-      maxParallelRefresh: Option[Int] = None
-    )
   }
 
   final private case class BoundedRefresh[F[_] : Monad, K](
@@ -238,7 +232,7 @@ object AutoFetchingCache {
     **/
   def createCache[F[_] : Concurrent : Timer, K, V](
     defaultExpiration: Option[TimeSpec],
-    refreshConfig: Option[Refresh.Config]
+    refreshConfig: Option[RefreshConfig]
   )(fetch: K => F[V]): F[AutoFetchingCache[F, K, V]] =
     for {
       valuesRef <- Ref.of[F, Map[K, CacheContent[F, V]]](Map.empty)
@@ -258,5 +252,14 @@ object AutoFetchingCache {
       }}
     } yield new AutoFetchingCache[F, K, V](valuesRef, defaultExpiration, refresh, fetch)
 
+
+  final class RefreshConfig private (
+    val period: TimeSpec,
+    val maxParallelRefresh: Option[Int]
+  )
+  object RefreshConfig {
+    def apply(period: TimeSpec, maxParallelRefresh: Option[Int] = None): RefreshConfig = 
+      new RefreshConfig(period, maxParallelRefresh)
+  }
 
 }
