@@ -188,27 +188,6 @@ object AutoFetchingCache {
   def keys[F[_] : Sync, K, V](cache: AutoFetchingCache[F, K, V]): F[List[K]] =
     cache.values.get.map(_.keys.toList)
 
-  /**
-    * Delete an item from the cache. Won't do anything if the item is not present.
-    **/
-  // implementing delete require for the bounded refresh that `type RefreshMap[F[_], K] = Map[K, (Int, Option[Fiber[F, Unit]])]`
-  // to correctly handle the counter without having to remove every k in the boundedQueue
-  //  def delete[F[_], K, V](cache: AutoFetchingCache[F, K, V])(k: K)
-  //                        (implicit S: Sync[F]): F[Unit] =
-  //    cache.values.modify(m =>
-  //      (m - k, m.get(k) match {
-  //        case Some(Fetching(f)) => f.cancel
-  //        case _ => S.unit
-  //      })) >> cache.refresh.traverse { refresh =>
-  //      refresh.tasks.modify(m => (m - k,
-  //        m.get(k) match {
-  //          case Some((_, f)) => f.cancel
-  //          case None => S.unit
-  //        }
-  //      ))
-  //    }.void
-
-
   def cancelReloads[F[_] : Monad, K, V](cache: AutoFetchingCache[F, K, V]): F[Unit] =
     cache.refresh.map(_.cancelAll).getOrElse(Monad[F].unit)
 
