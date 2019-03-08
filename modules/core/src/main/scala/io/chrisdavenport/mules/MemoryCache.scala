@@ -315,7 +315,7 @@ object MemoryCache {
     * If the specified default expiration value is None, items inserted by insert will never expire.
     **/
   def createMemoryCache[F[_]: Sync: Clock, K, V](
-    defaultExpiration: Option[TimeSpec],
+    defaultExpiration: Option[TimeSpec]
   ): F[MemoryCache[F, K, V]] = 
     Ref.of[F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
       .map(new MemoryCache[F, K, V](
