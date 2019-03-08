@@ -8,20 +8,24 @@ import cats.effect.IO
 import cats.effect.laws.util.TestContext
 
 class MemoryCacheSpec extends Specification {
-  val ctx = TestContext()
-  implicit val testTimer: Timer[IO] = ctx.timer[IO]
+
 
   "MemoryCache" should {
     "get a value in a quicker period than the timeout" in {
+      val ctx = TestContext()
+      implicit val testTimer: Timer[IO] = ctx.timer[IO]
       val setup = for {
         cache <- MemoryCache.createMemoryCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
+        _ = ctx.tick(1.nano)
         value <- cache.lookup("Foo")
       } yield value
       setup.unsafeRunSync must_=== Some(1)
     }
 
     "remove a value after delete" in {
+      val ctx = TestContext()
+      implicit val testTimer: Timer[IO] = ctx.timer[IO]
       val setup = for {
         cache <- MemoryCache.createMemoryCache[IO, String, Int](None)
         _ <- cache.insert("Foo", 1)
@@ -32,6 +36,8 @@ class MemoryCacheSpec extends Specification {
     }
 
     "Remove a value in mass delete" in {
+      val ctx = TestContext()
+      implicit val testTimer: Timer[IO] = ctx.timer[IO]
       val setup = for {
         cache <- MemoryCache.createMemoryCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
@@ -43,6 +49,8 @@ class MemoryCacheSpec extends Specification {
     }
 
     "Lookup after interval fails to get a value" in {
+      val ctx = TestContext()
+      implicit val testTimer: Timer[IO] = ctx.timer[IO]
       val setup = for {
         cache <- MemoryCache.createMemoryCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
