@@ -29,7 +29,7 @@ Now Lets Use What We have built.
 
 ```scala
 val getInserted = for {
-        cache <- Cache.createCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
+        cache <- MemoryCache.createMemoryCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
         value <- cache.lookup("Foo")
 } yield value
@@ -46,7 +46,7 @@ getInserted.unsafeRunSync
 // res0: Option[Int] = Some(1)
 
 val getRemoved = for {
-          cache <- Cache.createCache[IO, String, Int](None)
+          cache <- MemoryCache.createMemoryCache[IO, String, Int](None)
           _ <- cache.insert("Foo", 1)
           _ <- cache.delete("Foo")
           value <- cache.lookup("Foo")
@@ -65,7 +65,7 @@ getRemoved.unsafeRunSync
 
 
 val getAfterPurged = for {
-        cache <- Cache.createCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
+        cache <- MemoryCache.createMemoryCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
         _ <- timer.sleep(2.seconds)
         _ <- cache.purgeExpired
@@ -84,7 +84,7 @@ getAfterPurged.unsafeRunSync
 // res2: Option[Int] = None
 
 val lookupAfterInterval = for {
-        cache <- Cache.createCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
+        cache <- MemoryCache.createMemoryCache[IO, String, Int](Some(Cache.TimeSpec.unsafeFromDuration(1.second)))
         _ <- cache.insert("Foo", 1)
         _ <- timer.sleep(2.seconds)
         value <- cache.lookup("Foo")
