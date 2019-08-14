@@ -1,5 +1,6 @@
 package io.chrisdavenport.mules
 
+import cats._
 import cats.data._
 import cats.effect._
 // For Cats-effect 1.0
@@ -77,22 +78,30 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
         case n@None => onCacheMiss(k).as(n)
       }
 
-  private def lookupItemSimple(k: K): F[Option[MemoryCacheItem[V]]] = 
-    ref.get.map(_.get(k))
-
   /**
    * Internal Function Used for Lookup and management of values.
    * If isExpired and The boolean for delete is present then we delete,
    * otherwise return the value.
    **/
   private def lookupItemT(del: Boolean, k: K, t: TimeSpec): F[Option[MemoryCacheItem[V]]] = {
-    val optionT = for {
-      i <- OptionT(lookupItemSimple(k))
-      e = isExpired(t, i)
-      _ <- if (e && del) OptionT.liftF(delete(k)) else OptionT.some[F](())
-      result <- if (e) OptionT.none[F, MemoryCacheItem[V]] else OptionT.some[F](i)
-    } yield result
-    optionT.value
+    for {
+      (i, gotDeleted) <- {
+        ref.modify{ map => 
+          val value = map.get(k)
+          val newMapOpt = {
+            for {
+              a <- value
+              _ <- Alternative[Option].guard(!(isExpired(t, a) && del ))
+            } yield map - (k)
+          }
+          val isDeleted = newMapOpt.isEmpty
+          (newMapOpt.getOrElse(map), (value, isDeleted))
+        }
+      }
+      out <- if (gotDeleted) {
+        onDelete(k).as(Option.empty[MemoryCacheItem[V]])
+      } else i.pure[F]
+    } yield out
   }
 
   /**
