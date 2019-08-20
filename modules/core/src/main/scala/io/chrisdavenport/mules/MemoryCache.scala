@@ -91,7 +91,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
           val newMapOpt = {
             for {
               a <- value
-              _ <- Alternative[Option].guard(!(isExpired(t, a) && del ))
+              _ <- Alternative[Option].guard(!(del && isExpired(t, a)))
             } yield map - (k)
           }
           val isDeleted = newMapOpt.isEmpty
