@@ -19,14 +19,12 @@ lazy val reload = project.in(file("modules/reload"))
     )
   )
 
-val catsV = "1.6.1"
-val catsEffectV = "1.4.0"
-val catsCollectionV = "0.7.0"
+val catsV = "2.0.0-RC1"
+val catsEffectV = "2.0.0-RC1"
+val catsCollectionV = "0.8.0"
 
 val specs2V = "4.7.0"
-val disciplineV = "0.11.1"
-
-val scShapelessV = "1.1.8"
+val disciplineSpecs2V = "1.0.0-RC1"
 
 
 lazy val contributors = Seq(
@@ -36,10 +34,9 @@ lazy val contributors = Seq(
 lazy val commonSettings = Seq(
   organization := "io.chrisdavenport",
 
-  scalaVersion := "2.12.8",
-  crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
+  scalaVersion := "2.13.0",
+  crossScalaVersions := Seq(scalaVersion.value, "2.12.8"),
 
-  scalacOptions += "-Yrangepos",
 
   addCompilerPlugin("org.typelevel" % "kind-projector" % "0.10.3" cross CrossVersion.binary),
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
@@ -52,8 +49,7 @@ lazy val commonSettings = Seq(
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
-    "org.typelevel"               %% "discipline"                 % disciplineV   % Test,
-    "com.github.alexarchambault"  %% "scalacheck-shapeless_1.13"  % scShapelessV  % Test
+    "org.typelevel"               %% "discipline-specs2"          % disciplineSpecs2V % Test,
   )
 )
 
