@@ -1,5 +1,6 @@
 package io.chrisdavenport.mules
 
+import cats._
 import cats.data._
 import cats.effect._
 // For Cats-effect 1.0
@@ -77,22 +78,28 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
         case n@None => onCacheMiss(k).as(n)
       }
 
-  private def lookupItemSimple(k: K): F[Option[MemoryCacheItem[V]]] = 
-    ref.get.map(_.get(k))
-
   /**
    * Internal Function Used for Lookup and management of values.
    * If isExpired and The boolean for delete is present then we delete,
    * otherwise return the value.
    **/
   private def lookupItemT(del: Boolean, k: K, t: TimeSpec): F[Option[MemoryCacheItem[V]]] = {
-    val optionT = for {
-      i <- OptionT(lookupItemSimple(k))
-      e = isExpired(t, i)
-      _ <- if (e && del) OptionT.liftF(delete(k)) else OptionT.some[F](())
-      result <- if (e) OptionT.none[F, MemoryCacheItem[V]] else OptionT.some[F](i)
-    } yield result
-    optionT.value
+    for {
+      (i, gotDeleted) <- {
+        ref.modify{ map => 
+          val value = map.get(k)
+          val exp = value.map(isExpired(t, _)).getOrElse(false)
+          val willRemove = del && exp
+          val newMapOpt = Alternative[Option].guard(willRemove).as(map - (k))
+          val nonExpiredValue = Alternative[Option].guard(!exp) *> value
+          val out = (newMapOpt.getOrElse(map), (nonExpiredValue, willRemove))
+          out
+        }
+      }
+      out <- if (gotDeleted) {
+        onDelete(k).as(Option.empty[MemoryCacheItem[V]])
+      } else i.pure[F]
+    } yield out
   }
 
   /**
@@ -183,20 +190,21 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def size: F[Int] = 
     ref.get.map(_.size)
 
+  private def purgeKeyIfExpired(m: Map[K, MemoryCacheItem[V]], k: K, checkAgainst: TimeSpec): (Map[K, MemoryCacheItem[V]], Option[K]) = 
+    m.get(k)
+      .map(item => 
+        if (isExpired(checkAgainst, item)) ((m - (k)), k.some) 
+        else (m, None)
+      )
+      .getOrElse((m, None))
+
+
   /**
    * Delete all items that are expired.
    *
    * This is one big atomic operation.
    **/
   def purgeExpired: F[Unit] = {
-    def purgeKeyIfExpired(m: Map[K, MemoryCacheItem[V]], k: K, checkAgainst: TimeSpec): (Map[K, MemoryCacheItem[V]], Option[K]) = 
-      m.get(k)
-        .map(item => 
-          if (isExpired(checkAgainst, item)) ((m - (k)), k.some) 
-          else (m, None)
-        )
-        .getOrElse((m, None))
-
     for {
       now <- C.monotonic(NANOSECONDS)
       chain <- ref.modify(

@@ -7,8 +7,10 @@ import cats.implicits._
 
 // Value of Time In Nanoseconds
 final class TimeSpec private (
-                         val nanos: Long
-                       ) extends AnyVal
+  val nanos: Long
+) extends AnyVal {
+  override def toString(): String = s"TimeSpec($nanos nanos)"
+}
 object TimeSpec {
 
   def fromDuration(duration: FiniteDuration): Option[TimeSpec] =
