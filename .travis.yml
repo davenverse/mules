@@ -22,7 +22,7 @@ script:
   - sbt ++$TRAVIS_SCALA_VERSION mimaReportBinaryIssues
 
 after_success:
-- test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && test $TRAVIS_REPO_SLUG == "ChristopherDavenport/vault" && sbt ++$TRAVIS_SCALA_VERSION publish
+- test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && test $TRAVIS_REPO_SLUG == "ChristopherDavenport/mules" && sbt ++$TRAVIS_SCALA_VERSION publish
 
 cache:
   directories:
