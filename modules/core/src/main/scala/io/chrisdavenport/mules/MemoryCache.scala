@@ -89,10 +89,10 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
         ref.modify{ map => 
           val value = map.get(k)
           val exp = value.map(isExpired(t, _)).getOrElse(false)
-          val shouldRemove = del && exp
-          val newMapOpt = Alternative[Option].guard(shouldRemove).as(map - (k))
+          val willRemove = del && exp
+          val newMapOpt = Alternative[Option].guard(willRemove).as(map - (k))
           val nonExpiredValue = Alternative[Option].guard(!exp) *> value
-          val out = (newMapOpt.getOrElse(map), (nonExpiredValue, shouldRemove))
+          val out = (newMapOpt.getOrElse(map), (nonExpiredValue, willRemove))
           out
         }
       }
