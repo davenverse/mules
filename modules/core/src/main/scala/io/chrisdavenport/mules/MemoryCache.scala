@@ -72,6 +72,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def lookup(k: K): F[Option[V]] = 
     C.monotonic(NANOSECONDS)
       .flatMap(now => lookupItemT(true, k, TimeSpec.unsafeFromNanos(now)))
+      .flatTap(a => Sync[F].delay(println(a)))
       .map(_.map(_.item))
       .flatMap{
         case s@Some(v) => onCacheHit(k, v).as(s)
@@ -88,14 +89,12 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
       (i, gotDeleted) <- {
         ref.modify{ map => 
           val value = map.get(k)
-          val newMapOpt = {
-            for {
-              a <- value
-              _ <- Alternative[Option].guard(!(del && isExpired(t, a)))
-            } yield map - (k)
-          }
-          val isDeleted = newMapOpt.isEmpty
-          (newMapOpt.getOrElse(map), (value, isDeleted))
+          val exp = value.map(isExpired(t, _)).getOrElse(false)
+          val shouldRemove = del && exp
+          val newMapOpt = Alternative[Option].guard(shouldRemove).as(map - (k))
+          val expiredValue = Alternative[Option].guard(!exp) *> value
+          val out = (newMapOpt.getOrElse(map), (expiredValue, shouldRemove))
+          out
         }
       }
       out <- if (gotDeleted) {
@@ -192,20 +191,21 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def size: F[Int] = 
     ref.get.map(_.size)
 
+  private def purgeKeyIfExpired(m: Map[K, MemoryCacheItem[V]], k: K, checkAgainst: TimeSpec): (Map[K, MemoryCacheItem[V]], Option[K]) = 
+    m.get(k)
+      .map(item => 
+        if (isExpired(checkAgainst, item)) ((m - (k)), k.some) 
+        else (m, None)
+      )
+      .getOrElse((m, None))
+
+
   /**
    * Delete all items that are expired.
    *
    * This is one big atomic operation.
    **/
   def purgeExpired: F[Unit] = {
-    def purgeKeyIfExpired(m: Map[K, MemoryCacheItem[V]], k: K, checkAgainst: TimeSpec): (Map[K, MemoryCacheItem[V]], Option[K]) = 
-      m.get(k)
-        .map(item => 
-          if (isExpired(checkAgainst, item)) ((m - (k)), k.some) 
-          else (m, None)
-        )
-        .getOrElse((m, None))
-
     for {
       now <- C.monotonic(NANOSECONDS)
       chain <- ref.modify(

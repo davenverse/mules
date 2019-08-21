@@ -3,6 +3,7 @@ package io.chrisdavenport.mules
 import org.specs2.mutable.Specification
 import scala.concurrent.duration._
 import cats.effect._
+import cats.effect.concurrent._
 // import cats.effect.implicits._
 import cats.effect.IO
 import cats.effect.laws.util.TestContext
@@ -58,6 +59,21 @@ class MemoryCacheSpec extends Specification {
         value <- cache.lookup("Foo")
       } yield value
       setup.unsafeRunSync must_=== None
+    }
+
+    "Not Remove an item on lookup No Delete" in {
+      val ctx = TestContext()
+      implicit val testTimer: Timer[IO] = ctx.timer[IO]
+      val setup = for {
+        checkWasTouched <- Ref[IO].of(false)
+        iCache <- MemoryCache.createMemoryCache[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))
+        cache = iCache.setOnDelete(_ => checkWasTouched.set(true))
+        _ <- cache.insert("Foo", 1)
+        _ <- Sync[IO].delay(ctx.tick(2.seconds))
+        value <- cache.lookupNoUpdate("Foo")
+        wasTouched <- checkWasTouched.get
+      } yield (value, wasTouched)
+      setup.unsafeRunSync.must_===((Option.empty[Int], false))
     }
   }
 }
