@@ -72,7 +72,6 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def lookup(k: K): F[Option[V]] = 
     C.monotonic(NANOSECONDS)
       .flatMap(now => lookupItemT(true, k, TimeSpec.unsafeFromNanos(now)))
-      .flatTap(a => Sync[F].delay(println(a)))
       .map(_.map(_.item))
       .flatMap{
         case s@Some(v) => onCacheHit(k, v).as(s)
