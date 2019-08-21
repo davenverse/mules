@@ -19,10 +19,10 @@ lazy val reload = project.in(file("modules/reload"))
   )
 
 val catsV = "1.6.1"
-val catsEffectV = "1.3.1"
-val catsCollectionV = "0.8.0"
+val catsEffectV = "1.4.0"
+val catsCollectionV = "0.7.0"
 
-val specs2V = "4.6.0"
+val specs2V = "4.7.0"
 val disciplineV = "0.11.1"
 
 val scShapelessV = "1.1.8"
@@ -41,7 +41,7 @@ lazy val commonSettings = Seq(
   scalacOptions += "-Yrangepos",
 
   addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.10" cross CrossVersion.binary),
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.0"),
+  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 
 
   libraryDependencies ++= Seq(

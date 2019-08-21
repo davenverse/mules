@@ -16,4 +16,4 @@ cache:
     - $HOME/.sbt
 
 jdk:
-  - oraclejdk8
+  - openjdk8
