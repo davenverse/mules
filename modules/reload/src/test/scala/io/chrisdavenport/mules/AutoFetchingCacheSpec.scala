@@ -2,7 +2,7 @@ package io.chrisdavenport.mules.reload
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
-import cats.syntax.functor._
+import cats.implicits._
 import io.chrisdavenport.mules._
 import org.specs2.mutable.Specification
 
@@ -63,6 +63,26 @@ class AutoFetchingCacheSpec extends Specification {
 
       val (cValue, value) = setup.unsafeRunSync
       (value must_=== 1).and(cValue >= 4)
+    }
+
+    "refetch value after autoReload timeout and before default expiration" in {
+      val setup = for {
+        count <- Ref.of[IO, Int](0)
+
+        cache <- AutoFetchingCache.createCache[IO, String, Int](
+          TimeSpec.fromDuration(3.second),
+          Some(AutoFetchingCache.RefreshConfig(TimeSpec.unsafeFromDuration(500.milliseconds))))(_ =>
+          count.update( _ + 1) *> count.get
+        )
+        _ <- cache.lookupCurrent("Foo")
+        _ <- timer.sleep(2.seconds)
+        value <- cache.lookupCurrent("Foo")
+        cValue <- count.get
+
+      } yield (cValue, value)
+
+      val (cValue, value) = setup.unsafeRunSync
+      (value must be >= 4).and(cValue >= 4)
     }
 
   }
