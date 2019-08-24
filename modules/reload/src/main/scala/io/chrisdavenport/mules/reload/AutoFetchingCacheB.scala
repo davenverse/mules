@@ -7,16 +7,15 @@ import cats.effect._
 import cats.implicits._
 import cats.collections.Dequeue
 import io.chrisdavenport.mules._
-import io.chrisdavenport.mules.reload.AutoFetchingCacheB.{Refresh, CacheContent}
+import io.chrisdavenport.mules.reload.AutoFetchingCacheB.Refresh
 
 import scala.collection.immutable.Map
-import scala.concurrent.duration.{Duration, _}
+import scala.concurrent.duration.Duration
 
 class AutoFetchingCacheB[F[_] : Concurrent : Timer, K, V](
-  private val values: Ref[F, Map[K, CacheContent[F, V]]],
-  val defaultExpiration: Option[TimeSpec],
+  private val innerCache: MemoryCache[F, K, V],
   private val refresh: Refresh[F, K]
-) extends Lookup[F, K, V] {
+) extends CacheWithTimeout[F, K, V] {
   import AutoFetchingCacheB._
 
   /**
@@ -24,13 +23,7 @@ class AutoFetchingCacheB[F[_] : Concurrent : Timer, K, V](
    */
   def cancelReloads: F[Unit] = refresh.cancelAll
 
-  private def extractContentT(t: TimeSpec, content: CacheContent[F, V]): F[Option[V]] = content match {
-    case v0: CacheItem[F, V] =>
-      if (isExpired(t, v0))
-        none[V].pure[F]
-      else
-        Option(v0.item).pure[F]
-  }
+  def delete(k: K): F[Unit] = innerCache.delete(k)
 
   private def fetchAndInsert(k: K, fetch: F[V]): F[V] =
     for {
@@ -42,45 +35,25 @@ class AutoFetchingCacheB[F[_] : Concurrent : Timer, K, V](
    * Insert an item in the cache, using the default expiration value of the cache.
    */
   def insert(k: K, v: V): F[Unit] =
-    insertWithTimeout(defaultExpiration)(k, v)
+    innerCache.insert(k, v)
 
 
-  /**
-   * Insert an item in the cache, with an explicit expiration value.
-   *
-   * If the expiration value is None, the item will never expire. The default expiration value of the cache is ignored.
-   *
-   * The expiration value is relative to the current clockMonotonic time, i.e. it will be automatically added to the result of clockMonotonic for the supplied unit.
-   **/
   def insertWithTimeout(
                          optionTimeout: Option[TimeSpec]
-                       )(k: K, v: V): F[Unit] = {
-    for {
-      now <- Timer[F].clock.monotonic(NANOSECONDS)
-      timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
-      _ <- values.update(_ + (k -> CacheItem[F, V](v, timeout, None)))
-    } yield ()
-  }
-
-  private def isExpired(checkAgainst: TimeSpec, cacheItem: CacheItem[F, V]): Boolean = {
-    cacheItem.itemExpiration.fold(false) {
-      case e if e.nanos < checkAgainst.nanos => true
-      case _ => false
-    }
-  }
+                       )(k: K, v: V): F[Unit] =
+    innerCache.insertWithTimeout(optionTimeout)(k, v)
 
   /**
    * Return all keys present in the cache, including expired items.
    **/
   def keys: F[List[K]] =
-    values.get.map(_.keys.toList)
+    innerCache.keys
 
   def lookup(k: K): F[Option[V]] =
-    lookup(k, NoFetch[F, V]())
+    innerCache.lookup(k)
 
   def lookup(k: K, fs: FetchStrategy[F, V]): F[Option[V]] =
-    Timer[F].clock.monotonic(NANOSECONDS)
-      .flatMap(now => lookupItemT(k, fs, TimeSpec.unsafeFromNanos(now)))
+    lookupItemT(k, fs)
 
   /**
    * This method always returns as is expected.
@@ -94,23 +67,19 @@ class AutoFetchingCacheB[F[_] : Concurrent : Timer, K, V](
   def lookupOrAutoFetch(k: K, fetch: F[V], duration: TimeSpec): F[V] =
     lookup(k, AutoFetch(fetch, duration)).map(_.get)
 
-  private def lookupItemSimple(k: K): F[Option[CacheContent[F, V]]] =
-    values.get.map(_.get(k))
-
 
   private def lookupItemT(k: K,
-                          fs: FetchStrategy[F, V],
-                          t: TimeSpec): F[Option[V]] = {
+                          fs: FetchStrategy[F, V]): F[Option[V]] = {
     for {
       _ <- fs match {
              case AutoFetch(f, p) => setupRefresh(k, f, p)
              case _ => ().pure[F]
            }
-      i <- lookupItemSimple(k)
-      v <- (i, fs) match {
+      existing <- lookup(k)
+      v <- (existing, fs) match {
         case (None, FetchOnce(fetch)) => fetchAndInsert(k, fetch).map(Option(_))
         case (None, AutoFetch(fetch, _)) => fetchAndInsert(k, fetch).map(Option(_))
-        case (Some(content), _) => extractContentT(t, content)
+        case (Some(v), _) => Some(v).pure[F]
         case _ => none[V].pure[F]
       }
     } yield v
@@ -171,8 +140,7 @@ class AutoFetchingCacheB[F[_] : Concurrent : Timer, K, V](
   /**
    * Return the size of the cache, including expired items.
    **/
-  def size: F[Int] =
-    values.get.map(_.size)
+  def size: F[Int] = innerCache.size
 
 }
 
@@ -221,23 +189,6 @@ object AutoFetchingCacheB {
   }
 
 
-  /**
-   * Cache Content - What is present in the cache at any
-   * moment.
-   *
-   * Fetching - The fiber of the currently running computation
-   * to create get the value for the cache
-   *
-   * CacheItem - A value in the cache.
-   */
-  private sealed abstract class CacheContent[F[_], A]
-
-  private case class CacheItem[F[_], A](
-                                         item: A,
-                                         itemExpiration: Option[TimeSpec],
-                                         fetch: Option[F[A]]
-                                       ) extends CacheContent[F, A]
-
   final private case class BoundedQueue[A](maxSize: Int, currentSize: Int, queue: Dequeue[A]) {
 
     def push(a : A): (BoundedQueue[A], Option[A]) = {
@@ -267,7 +218,7 @@ object AutoFetchingCacheB {
                                                     maxParallelRefresh: Option[Int] = None
                                                   ): F[AutoFetchingCacheB[F, K, V]] =
     for {
-      valuesRef <- Ref.of[F, Map[K, CacheContent[F, V]]](Map.empty)
+      innerCache <- MemoryCache.createMemoryCache[F, K, V](defaultExpiration)
       s <- Semaphore(1)
       refresh <-
         maxParallelRefresh match {
@@ -282,6 +233,6 @@ object AutoFetchingCacheB {
                 UnboundedRefresh(s, ref)
               )
         }
-    } yield new AutoFetchingCacheB[F, K, V](valuesRef, defaultExpiration, refresh)
+    } yield new AutoFetchingCacheB[F, K, V](innerCache, refresh)
 
 }
