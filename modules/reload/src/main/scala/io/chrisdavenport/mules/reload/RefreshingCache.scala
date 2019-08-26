@@ -75,6 +75,7 @@ class RefreshingCache[F[_]: Timer, K, V] private (
    * Note, by design, it does not override an existing refresh effect for the same k.
    * To setup a new refresh method for it, you must
    * first {@code delete(k)} and then call this method.
+   * If refresh keeps failing, the value will eventually expire and the refresh stops
    */
   def lookupOrRefresh(k: K, refresh: F[V], period: TimeSpec): F[V] =
     lookup(k).flatMap {
