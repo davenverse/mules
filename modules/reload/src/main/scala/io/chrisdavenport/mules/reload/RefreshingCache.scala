@@ -8,7 +8,14 @@ import io.chrisdavenport.mules._
 import scala.collection.immutable.Map
 import scala.concurrent.duration.Duration
 
-class RefreshingCache[F[_]: Timer, K, V](
+/**
+ * A local memory cache that allows auto refreshing given a F[V]
+ * This class provides the same set of features as [[CacheWithTimeout]]
+ * plus 2 more methods
+ * 1. [[lookupOrFetch]]
+ * 2. [[lookupOrRefresh]]
+ */
+class RefreshingCache[F[_]: Timer, K, V] private (
   innerCache: MemoryCache[F, K, V],
   refreshSemaphore: Semaphore[F],
   refreshTasks: Ref[F, Map[K, Fiber[F, Unit]]]
@@ -19,22 +26,13 @@ class RefreshingCache[F[_]: Timer, K, V](
   /**
    * Manually Cancel All Current Reloads
    */
-  def cancelRefreshes: F[Unit] =
+  def cancelRefreshes: F[Int] =
     refreshTasks.modify { m =>
-      (Map.empty, m.values.toList.traverse[F, Unit](_.cancel).void)
+      (Map.empty, m.values.toList.traverse[F, Unit](_.cancel).map(_.size))
     }.flatten
 
   def delete(k: K): F[Unit] =
-    refreshTasks.modify { m =>
-      (m - k, m.get(k).traverse[F, Unit](_.cancel))
-    }.flatten *>
-    innerCache.delete(k)
-
-  private def fetchAndInsert(k: K, fetch: F[V]): F[V] =
-    for {
-      v <- fetch
-      _ <- insert(k, v)
-    } yield v
+    deregisterRefresh(k) *> innerCache.delete(k)
 
   /**
    * Return the size of the cache, including expired items.
@@ -62,6 +60,7 @@ class RefreshingCache[F[_]: Timer, K, V](
     innerCache.lookup(k)
 
   /**
+   * Try look up k. If the key is not present, will use fetch and insert using fetch
    * This method always returns as is expected.
    */
   def lookupOrFetch(k: K, fetch: F[V]): F[V] =
@@ -71,10 +70,17 @@ class RefreshingCache[F[_]: Timer, K, V](
     }
 
   /**
-   * This method always returns as is expected.
+   * Try look up k, if the key is not present it will setup an auto {@code refresh} every {@code period}
+   * This method is idempotent and always returns as expected.
+   * Note, by design, it does not override an existing refresh effect for the same k.
+   * To setup a new refresh method for it, you must
+   * first {@code delete(k)} and then call this method.
    */
   def lookupOrRefresh(k: K, refresh: F[V], period: TimeSpec): F[V] =
-    setupRefresh(k, refresh, period) *> lookupOrFetch(k, refresh)
+    lookup(k).flatMap {
+      case Some(v) => v.pure[F]
+      case None => setupRefresh(k, refresh, period) *> fetchAndInsert(k, refresh)
+    }
 
   private def fetchIfKeyExist(k: K, fetch: F[V]): F[Option[V]] =
     lookup(k).flatMap(_.traverse(_ => fetch))
@@ -87,8 +93,12 @@ class RefreshingCache[F[_]: Timer, K, V](
         )
         newValueO <- fiber.join
         _ <- newValueO.traverse(nv => insert(k, nv))
-      } yield ()
-    }.handleError(_ => ()) >> loop()
+      } yield newValueO
+    }.attempt.flatMap {
+      case Left(_) => loop() //tolerate All errors
+      case Right(None) => deregisterRefresh(k).void //key already removed, deregister
+      case Right(Some(_)) => loop()
+    }
 
     if (innerCache.defaultExpiration.fold(false)(_.nanos < period.nanos))
       F.raiseError(RefreshDurationTooLong(period, innerCache.defaultExpiration.get))
@@ -106,14 +116,17 @@ class RefreshingCache[F[_]: Timer, K, V](
     }
   }
 
-  private sealed trait RefreshStrategy
-
-  private case class RefreshOnce(fetch: F[V]) extends RefreshStrategy
-
-  private case class AutoRefresh(refresh: F[V], period: TimeSpec) extends RefreshStrategy
-
+  private def deregisterRefresh(k: K): F[Option[Unit]] =
+    refreshTasks.modify { m =>
+      (m - k, m.get(k).traverse[F, Unit](_.cancel))
+    }.flatten
 
 
+  private def fetchAndInsert(k: K, fetch: F[V]): F[V] =
+    for {
+      v <- fetch
+      _ <- insert(k, v)
+    } yield v
 
 }
 
