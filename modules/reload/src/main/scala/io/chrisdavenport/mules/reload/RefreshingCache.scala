@@ -19,12 +19,15 @@ class RefreshingCache[F[_]: Timer, K, V](
   /**
    * Manually Cancel All Current Reloads
    */
-  def cancelReloads: F[Unit] =
+  def cancelRefreshes: F[Unit] =
     refreshTasks.modify { m =>
       (Map.empty, m.values.toList.traverse[F, Unit](_.cancel).void)
     }.flatten
 
   def delete(k: K): F[Unit] =
+    refreshTasks.modify { m =>
+      (m - k, m.get(k).traverse[F, Unit](_.cancel))
+    }.flatten *>
     innerCache.delete(k)
 
   private def fetchAndInsert(k: K, fetch: F[V]): F[V] =
@@ -73,17 +76,19 @@ class RefreshingCache[F[_]: Timer, K, V](
   def lookupOrRefresh(k: K, refresh: F[V], period: TimeSpec): F[V] =
     setupRefresh(k, refresh, period) *> lookupOrFetch(k, refresh)
 
-  private def setupRefresh(k: K, fetch: F[V], period: TimeSpec): F[Unit] = {
+  private def fetchIfKeyExist(k: K, fetch: F[V]): F[Option[V]] =
+    lookup(k).flatMap(_.traverse(_ => fetch))
 
+  private def setupRefresh(k: K, fetch: F[V], period: TimeSpec): F[Unit] = {
     def loop(): F[Unit] = {
       for {
-        fiber <- Concurrent[F].start[V](
-          Timer[F].sleep(Duration.fromNanos(period.nanos)) >> fetch
+        fiber <- Concurrent[F].start(
+          Timer[F].sleep(Duration.fromNanos(period.nanos)) >> fetchIfKeyExist(k, fetch)
         )
-        newValue <- fiber.join
-        out <- insert(k, newValue)
-      } yield out
-    }.handleErrorWith(_ => loop()) >> loop()
+        newValueO <- fiber.join
+        _ <- newValueO.traverse(nv => insert(k, nv))
+      } yield ()
+    }.handleError(_ => ()) >> loop()
 
     if (innerCache.defaultExpiration.fold(false)(_.nanos < period.nanos))
       F.raiseError(RefreshDurationTooLong(period, innerCache.defaultExpiration.get))
