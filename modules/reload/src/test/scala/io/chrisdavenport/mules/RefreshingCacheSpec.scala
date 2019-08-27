@@ -22,7 +22,7 @@ class RefreshingCacheSpec extends Specification {
 
     "returns None if the key isn't present" in {
       val setup = for {
-         cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(1.second))
+         cache <- RefreshingCache.createCache[IO, String, Int](None)
          value <- cache.lookup("Foo")
 
       } yield value
@@ -57,8 +57,8 @@ class RefreshingCacheSpec extends Specification {
     "fetch value if a fetch is given" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(1.second))
-        value <- cache.lookupOrFetch("Foo", count.get)
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
+        value <- cache.lookupOrFetch("Foo")(count.get)
       } yield value
 
       setup.unsafeRunSync must_=== 0
@@ -67,8 +67,8 @@ class RefreshingCacheSpec extends Specification {
     "fetch value if an auto fetch is given" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(1.second))
-        value <- cache.lookupOrRefresh("Foo", count.get, autoFetchEvery(500.milliseconds))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
+        value <- cache.lookupOrRefresh("Foo", autoFetchEvery(500.milliseconds))(count.get)
         _ <- cache.cancelRefreshes
       } yield value
 
@@ -78,8 +78,8 @@ class RefreshingCacheSpec extends Specification {
     "return Cached value before auto refresh" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(2.seconds))
-        _ <- cache.lookupOrRefresh("Foo", count.get, autoFetchEvery(1.second))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(1.second))(count.get)
         _ <- count.update(_ + 1)
         _ <- timer.sleep(500.milliseconds)
         value <- cache.lookup("Foo")
@@ -92,8 +92,8 @@ class RefreshingCacheSpec extends Specification {
     "return new value after auto refresh" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(3.seconds))
-        _ <- cache.lookupOrRefresh("Foo", count.get, autoFetchEvery(250.milliseconds))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(250.milliseconds))(count.get)
         _ <- count.update(_ + 1)
         _ <- timer.sleep(300.milliseconds)
         firstRead <- cache.lookup("Foo")
@@ -111,7 +111,7 @@ class RefreshingCacheSpec extends Specification {
     "keeps from expiration through by auto refresh" in {
       val setup = for {
         cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(1.second) )
-        _ <- cache.lookupOrRefresh("Foo", IO.pure(1), autoFetchEvery(500.milliseconds))
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(500.milliseconds))(IO.pure(1))
         _ <- timer.sleep(1500.milliseconds)
         value <- cache.lookup("Foo")
         _ <- cache.cancelRefreshes
@@ -123,7 +123,7 @@ class RefreshingCacheSpec extends Specification {
     "fails to setup auto fetch if refresh is longer than default expiration" in {
       val setup = for {
         cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(1.second) )
-        r <- cache.lookupOrRefresh("Foo", IO.pure(1), autoFetchEvery(1001.milliseconds))
+        r <- cache.lookupOrRefresh("Foo", autoFetchEvery(1001.milliseconds))(IO.pure(1))
         _ <- cache.cancelRefreshes
       } yield r
 
@@ -137,8 +137,8 @@ class RefreshingCacheSpec extends Specification {
 
     "auto refresh does not reinsert after deletion" in {
       val setup = for {
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(1.second))
-        _ <- cache.lookupOrRefresh("Foo", IO.pure(1), autoFetchEvery(500.milliseconds))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(500.milliseconds))(IO.pure(1))
         _ <- cache.delete("Foo")
         _ <- timer.sleep(750.milliseconds)
         value <- cache.lookup("Foo")
@@ -152,8 +152,8 @@ class RefreshingCacheSpec extends Specification {
     "auto refresh turns off after deletion" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(1.second))
-        _ <- cache.lookupOrRefresh("Foo", count.update(_ + 1).as(1), autoFetchEvery(500.milliseconds))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(500.milliseconds))(count.update(_ + 1).as(1))
         _ <- cache.delete("Foo")
         _ <- timer.sleep(750.milliseconds)
         cValue <- count.get
@@ -165,9 +165,9 @@ class RefreshingCacheSpec extends Specification {
     "does not register auto refresh if the key already exist" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(1.second))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
         _ <- cache.insert("Foo", 1)
-        _ <- cache.lookupOrRefresh("Foo", count.update(_ + 1).as(1), autoFetchEvery(500.milliseconds))
+        _ <- cache.lookupOrRefresh("Foo",  autoFetchEvery(500.milliseconds))(count.update(_ + 1).as(1))
         _ <- timer.sleep(750.milliseconds)
         cValue <- count.get
       } yield cValue
@@ -178,9 +178,9 @@ class RefreshingCacheSpec extends Specification {
     "failed refresh fetch can be recovered" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(3.seconds))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
 
-        _ <- cache.lookupOrRefreshWithRecover("Foo", autoFetchEvery(250.milliseconds))
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(250.milliseconds), None)
             { count.get.ensure(IntentionalExceptionForTesting)(_ != 1) }
             { case IntentionalExceptionForTesting => IO.unit}
         _ <- count.update(_ + 1)
@@ -203,9 +203,9 @@ class RefreshingCacheSpec extends Specification {
       val setup = for {
         count <- Ref.of[IO, Int](0)
 
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(300.milliseconds))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
 
-        _ <- cache.lookupOrRefreshWithRecover("Foo", autoFetchEvery(100.milliseconds))
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(100.milliseconds), None )
               { count.update(_ + 1) *> count.get.ensure(new Exception("unknown error"))(_ <= 1) }
               { case IntentionalExceptionForTesting => IO.unit}
 
@@ -226,9 +226,9 @@ class RefreshingCacheSpec extends Specification {
       val setup = for {
         count <- Ref.of[IO, Int](0)
 
-        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(300.milliseconds))
+        cache <- RefreshingCache.createCache[IO, String, Int](None)
 
-        _ <- cache.lookupOrRefreshWithRecover("Foo", autoFetchEvery(100.milliseconds))
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(100.milliseconds), expiresIn(300.milliseconds))
               { count.update(_ + 1) *> count.get.ensure(IntentionalExceptionForTesting)(_ <= 1) }
               { case IntentionalExceptionForTesting => IO.unit}
 

@@ -63,11 +63,17 @@ class RefreshingCache[F[_]: Timer, K, V] private (
    * Try look up k. If the key is not present, will use fetch and insert using fetch
    * This method always returns as is expected.
    */
-  def lookupOrFetch(k: K, fetch: F[V]): F[V] =
+  def lookupOrFetch(k: K)(fetch: F[V]): F[V] =
+    lookupOrFetch(defaultExpiration)(k)(fetch)
+
+  def lookupOrFetch(timeout: Option[TimeSpec])(k: K)(fetch: F[V]): F[V] =
     lookup(k).flatMap {
       case Some(v) => v.pure[F]
-      case None => fetchAndInsert(k, fetch)
+      case None => fetchAndInsert(k, fetch, timeout)
     }
+
+  def defaultExpiration: Option[TimeSpec] =
+    innerCache.defaultExpiration
 
   /**
    * Try look up k, if the key is not present it will setup an auto {@code refresh} every {@code period}
@@ -77,19 +83,28 @@ class RefreshingCache[F[_]: Timer, K, V] private (
    * first {@code delete(k)} and then call this method.
    * If refresh keeps failing, the value will eventually expire and the refresh stops
    */
-  def lookupOrRefresh(k: K, refresh: F[V], period: TimeSpec): F[V] =
-    lookupOrRefreshWithRecover(k, period)(refresh)(PartialFunction.empty)
+  def lookupOrRefresh(k: K, period: TimeSpec)(refresh: F[V]): F[V] =
+    lookupOrRefresh(k, period, defaultExpiration)(refresh)(PartialFunction.empty)
 
-  def lookupOrRefreshWithRecover(k: K, period: TimeSpec)(refresh: F[V])(recoverError: PartialFunction[Throwable, F[Unit]]): F[V] =
+  def lookupOrRefresh(k: K,
+                      period: TimeSpec,
+                      timeout: Option[TimeSpec])
+                     (refresh: F[V])
+                     (recoverError: PartialFunction[Throwable, F[Unit]]): F[V] =
     lookup(k).flatMap {
       case Some(v) => v.pure[F]
-      case None => setupRefresh(k, refresh, period, recoverError) *> fetchAndInsert(k, refresh)
+      case None => setupRefresh(k,
+        refresh,
+        period,
+        timeout,
+        recoverError) *> fetchAndInsert(k, refresh, timeout)
     }
 
 
   private def setupRefresh(k: K,
                            fetch: F[V],
                            period: TimeSpec,
+                           timeout: Option[TimeSpec],
                            recoverError: PartialFunction[Throwable, F[Unit]]): F[Unit] = {
 
     def loop(): F[Unit] = {
@@ -110,15 +125,15 @@ class RefreshingCache[F[_]: Timer, K, V] private (
         )
         result <- fiber.join
         r <- result match {
-          case Success(v) => insert(k, v) >> loop()
+          case Success(v) => insertWithTimeout(timeout)(k, v) >> loop()
           case ErrorRecovered => loop()
           case NotFound | ErrorUncovered => deregisterRefresh(k).void
         }
       } yield r
     }
 
-    if (innerCache.defaultExpiration.fold(false)(_.nanos < period.nanos))
-      F.raiseError(RefreshDurationTooLong(period, innerCache.defaultExpiration.get))
+    if (timeout.fold(false)(_.nanos < period.nanos))
+      F.raiseError(RefreshDurationTooLong(period, timeout.get))
     else {
       refreshSemaphore.withPermit {
         for {
@@ -139,10 +154,10 @@ class RefreshingCache[F[_]: Timer, K, V] private (
     }.flatten
 
 
-  private def fetchAndInsert(k: K, fetch: F[V]): F[V] =
+  private def fetchAndInsert(k: K, fetch: F[V], timeout: Option[TimeSpec]): F[V] =
     for {
       v <- fetch
-      _ <- insert(k, v)
+      _ <- insertWithTimeout(timeout)(k, v)
     } yield v
 
   sealed trait RefreshResult extends Serializable with Product
