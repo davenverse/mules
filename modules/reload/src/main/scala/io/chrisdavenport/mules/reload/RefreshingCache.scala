@@ -78,27 +78,43 @@ class RefreshingCache[F[_]: Timer, K, V] private (
    * If refresh keeps failing, the value will eventually expire and the refresh stops
    */
   def lookupOrRefresh(k: K, refresh: F[V], period: TimeSpec): F[V] =
+    lookupOrRefreshWithRecover(k, period)(refresh)(PartialFunction.empty)
+
+  def lookupOrRefreshWithRecover(k: K, period: TimeSpec)(refresh: F[V])(recoverError: PartialFunction[Throwable, F[Unit]]): F[V] =
     lookup(k).flatMap {
       case Some(v) => v.pure[F]
-      case None => setupRefresh(k, refresh, period) *> fetchAndInsert(k, refresh)
+      case None => setupRefresh(k, refresh, period, recoverError) *> fetchAndInsert(k, refresh)
     }
 
-  private def fetchIfKeyExist(k: K, fetch: F[V]): F[Option[V]] =
-    lookup(k).flatMap(_.traverse(_ => fetch))
 
-  private def setupRefresh(k: K, fetch: F[V], period: TimeSpec): F[Unit] = {
+  private def setupRefresh(k: K,
+                           fetch: F[V],
+                           period: TimeSpec,
+                           recoverError: PartialFunction[Throwable, F[Unit]]): F[Unit] = {
+
     def loop(): F[Unit] = {
+      def doRefreshFetch = {
+        lookup(k).flatMap[RefreshResult] {
+          case Some(_) => fetch.map[RefreshResult](Success(_))
+            .recoverWith(recoverError.andThen(_.as(ErrorRecovered))).recover {
+            case _ => ErrorUncovered
+          }
+          case None => NotFound.pure[F].widen
+        }
+      }
+
       for {
         fiber <- Concurrent[F].start(
-          Timer[F].sleep(Duration.fromNanos(period.nanos)) >> fetchIfKeyExist(k, fetch)
+          Timer[F].sleep(Duration.fromNanos(period.nanos)) >>
+            doRefreshFetch
         )
-        newValueO <- fiber.join
-        _ <- newValueO.traverse(nv => insert(k, nv))
-      } yield newValueO
-    }.attempt.flatMap {
-      case Left(_) => loop() //tolerate All errors
-      case Right(None) => deregisterRefresh(k).void //key already removed, deregister
-      case Right(Some(_)) => loop()
+        result <- fiber.join
+        r <- result match {
+          case Success(v) => insert(k, v) >> loop()
+          case ErrorRecovered => loop()
+          case NotFound | ErrorUncovered => deregisterRefresh(k).void
+        }
+      } yield r
     }
 
     if (innerCache.defaultExpiration.fold(false)(_.nanos < period.nanos))
@@ -129,9 +145,16 @@ class RefreshingCache[F[_]: Timer, K, V] private (
       _ <- insert(k, v)
     } yield v
 
+  sealed trait RefreshResult extends Serializable with Product
+
+  case class Success(v: V) extends RefreshResult
+  case object NotFound extends RefreshResult
+  case object ErrorRecovered extends RefreshResult
+  case object ErrorUncovered extends RefreshResult
 }
 
 object RefreshingCache {
+
 
 
   def createCache[F[_]: Concurrent: Timer, K, V](

@@ -175,15 +175,14 @@ class RefreshingCacheSpec extends Specification {
       setup.unsafeRunSync must_=== 0
     }
 
-    "failed refresh fetch is tolerated" in {
+    "failed refresh fetch can be recovered" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
         cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(3.seconds))
 
-        _ <- cache.lookupOrRefresh("Foo",
-          count.get.ensure(new Exception("cannot be 1"))(_ != 1),
-          autoFetchEvery(250.milliseconds))
-
+        _ <- cache.lookupOrRefreshWithRecover("Foo", autoFetchEvery(250.milliseconds))
+            { count.get.ensure(IntentionalExceptionForTesting)(_ != 1) }
+            { case IntentionalExceptionForTesting => IO.unit}
         _ <- count.update(_ + 1)
         _ <- timer.sleep(300.milliseconds)
         firstRead <- cache.lookup("Foo")
@@ -198,14 +197,40 @@ class RefreshingCacheSpec extends Specification {
       secondRead must_== Some(2)
     }
 
-    "value and refresh eventually expires on continuous fetch failures," in {
+
+
+    "failed refresh fetch still fails if recover doesn't catch" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
 
         cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(300.milliseconds))
-        _ <- cache.lookupOrRefresh("Foo",
-          count.update(_ + 1) *> count.get.ensure(new Exception("cannot be larger than 1"))(_ <= 1),
-          autoFetchEvery(100.milliseconds))
+
+        _ <- cache.lookupOrRefreshWithRecover("Foo", autoFetchEvery(100.milliseconds))
+              { count.update(_ + 1) *> count.get.ensure(new Exception("unknown error"))(_ <= 1) }
+              { case IntentionalExceptionForTesting => IO.unit}
+
+        _ <- timer.sleep(250.milliseconds)
+        value <- cache.lookup("Foo")
+        refreshesLeft <- cache.cancelRefreshes
+        readCount <- count.get
+
+      } yield (value, readCount, refreshesLeft)
+
+      val (value, readCount, refreshes) = setup.unsafeRunSync
+      value must_=== Some(1)
+      readCount must_==(2)
+      refreshes must_=== 0
+    }
+
+    "value and refresh eventually expires on continuous fetch failures" in {
+      val setup = for {
+        count <- Ref.of[IO, Int](0)
+
+        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(300.milliseconds))
+
+        _ <- cache.lookupOrRefreshWithRecover("Foo", autoFetchEvery(100.milliseconds))
+              { count.update(_ + 1) *> count.get.ensure(IntentionalExceptionForTesting)(_ <= 1) }
+              { case IntentionalExceptionForTesting => IO.unit}
 
         _ <- timer.sleep(700.milliseconds)
         value <- cache.lookup("Foo")
@@ -220,3 +245,5 @@ class RefreshingCacheSpec extends Specification {
     }
   }
 }
+
+case object IntentionalExceptionForTesting extends RuntimeException
