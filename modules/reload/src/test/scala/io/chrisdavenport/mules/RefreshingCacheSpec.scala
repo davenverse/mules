@@ -39,7 +39,6 @@ class RefreshingCacheSpec extends Specification {
       setup.unsafeRunSync must_=== Some(1)
     }
 
-
     "returns None if the value is inserted but expired" in {
       val setup = for {
          cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(500.milliseconds))
@@ -51,8 +50,6 @@ class RefreshingCacheSpec extends Specification {
 
       setup.unsafeRunSync must_=== None
     }
-
-
 
     "fetch value if a fetch is given" in {
       val setup = for {
@@ -199,7 +196,7 @@ class RefreshingCacheSpec extends Specification {
 
 
 
-    "failed refresh fetch still fails if recover doesn't catch" in {
+    "failed refresh fetch stops refresh if recover doesn't catch" in {
       val setup = for {
         count <- Ref.of[IO, Int](0)
 
@@ -243,6 +240,25 @@ class RefreshingCacheSpec extends Specification {
       readCount must be_<(4)
       refreshes must_=== 0
     }
+
+    "auto refresh use default expiration if not given one " in {
+      val setup = for {
+        count <- Ref.of[IO, Int](0)
+
+        cache <- RefreshingCache.createCache[IO, String, Int](expiresIn(200.milliseconds))
+
+        _ <- cache.lookupOrRefresh("Foo", autoFetchEvery(100.milliseconds))
+                                  { count.update(_ + 1) *> count.get.ensure(IntentionalExceptionForTesting)(_ <= 1) }
+
+
+        _ <- timer.sleep(250.milliseconds)
+        value <- cache.lookup("Foo")
+      } yield value
+
+      setup.unsafeRunSync must beNone
+
+    }
+
   }
 }
 

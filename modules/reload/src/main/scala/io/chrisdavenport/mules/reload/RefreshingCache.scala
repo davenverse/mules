@@ -170,8 +170,6 @@ class RefreshingCache[F[_]: Timer, K, V] private (
 
 object RefreshingCache {
 
-
-
   def createCache[F[_]: Concurrent: Timer, K, V](
       defaultExpiration: Option[TimeSpec]
   ): F[RefreshingCache[F, K, V]] =
