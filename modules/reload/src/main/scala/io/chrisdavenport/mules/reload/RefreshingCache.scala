@@ -14,6 +14,16 @@ import scala.concurrent.duration.Duration
  * plus 2 more methods
  * 1. [[lookupOrFetch]]
  * 2. [[lookupOrRefresh]]
+ * The [[lookupOrRefresh]] method allows users to have an item
+ * periodically refreshed from the backend. As long as the
+ * refresh successes, user will
+ * 1. never have a cache miss and,
+ * 2. never experience the data retrieve latency except the first read.
+ * Also [[lookupOrRefresh]] allow users to use custom logic to catch
+ * errors during refresh. This, combined with a relatively long expiration
+ * period and a short refresh period enable, the cache to tolerant short
+ * backend service disruption while keeping the value updated (when the service
+ * is up).  
  */
 class RefreshingCache[F[_]: Timer, K, V] private (
   innerCache: MemoryCache[F, K, V],
