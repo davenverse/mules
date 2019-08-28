@@ -145,7 +145,6 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
               } yield ()
             }
 
-
           case UnboundedRefresh(_, s, tasks) =>
             s.withPermit{
               for {

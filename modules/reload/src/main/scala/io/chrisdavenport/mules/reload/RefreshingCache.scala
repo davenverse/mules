@@ -10,7 +10,7 @@ import scala.concurrent.duration.Duration
 
 /**
  * A local memory cache that allows auto refreshing given a F[V]
- * This class provides the same set of features as [[CacheWithTimeout]]
+ * This class provides the same set of features as [[MemoryCache]]
  * plus 2 more methods
  * 1. [[lookupOrFetch]]
  * 2. [[lookupOrRefresh]]
@@ -23,14 +23,19 @@ import scala.concurrent.duration.Duration
  * errors during refresh. This, combined with a relatively long expiration
  * period and a short refresh period enable, the cache to tolerant short
  * backend service disruption while keeping the value updated (when the service
- * is up).  
+ * is up).
+ *
+ * Major caveat:
+ * There is no automatic mechanism to purge auto refreshing items that are no longer
+ * used by users. Hence the size of the cache is unbounded if user keeps adding more
+ * auto refreshing items.
+ *
  */
 class RefreshingCache[F[_]: Timer, K, V] private (
   innerCache: MemoryCache[F, K, V],
   refreshSemaphore: Semaphore[F],
   refreshTasks: Ref[F, Map[K, Fiber[F, Unit]]]
-)(implicit F: Concurrent[F])
-    extends CacheWithTimeout[F, K, V] {
+)(implicit F: Concurrent[F]) {
   import RefreshingCache._
 
   /**
@@ -158,6 +163,9 @@ class RefreshingCache[F[_]: Timer, K, V] private (
     }
   }
 
+  def purgeExpired: F[Unit] =
+    innerCache.purgeExpired
+
   private def deregisterRefresh(k: K): F[Option[Unit]] =
     refreshTasks.modify { m =>
       (m - k, m.get(k).traverse[F, Unit](_.cancel))
@@ -180,18 +188,31 @@ class RefreshingCache[F[_]: Timer, K, V] private (
 
 object RefreshingCache {
 
-  def createCache[F[_]: Concurrent: Timer, K, V](
+  def create[F[_]: Concurrent: Timer, K, V](
       defaultExpiration: Option[TimeSpec]
   ): F[RefreshingCache[F, K, V]] =
-    for {
-      innerCache <- MemoryCache.createMemoryCache[F, K, V](defaultExpiration)
-      s <- Semaphore(1)
-      tasks <- Ref.of[F, Map[K, Fiber[F, Unit]]](Map.empty)
-    } yield new RefreshingCache[F, K, V](innerCache, s, tasks)
+    MemoryCache.createMemoryCache[F, K, V](defaultExpiration).flatMap(createUsing[F, K, V])
+
 
   case class RefreshDurationTooLong(duration: TimeSpec, expiration: TimeSpec)
       extends RuntimeException {
     override def getMessage: String =
       s"refreshing period ($duration) cannot be longer than expiration (${expiration})"
   }
+
+  def createAutoPurging[F[_]: Concurrent: Timer, K, V](
+      expiresIn: TimeSpec,
+      checkOnExpirationsEvery: TimeSpec
+    ): Resource[F, RefreshingCache[F, K, V]] =
+    MemoryCache.createAutoMemoryCache(expiresIn, checkOnExpirationsEvery).evalMap(createUsing[F, K, V])
+
+  private def createUsing[F[_]: Concurrent: Timer, K, V](
+     innerCache: MemoryCache[F, K, V]
+   ): F[RefreshingCache[F, K, V]] =
+    for {
+      s <- Semaphore(1)
+      tasks <- Ref.of[F, Map[K, Fiber[F, Unit]]](Map.empty)
+    } yield new RefreshingCache[F, K, V](innerCache, s, tasks)
+
 }
+

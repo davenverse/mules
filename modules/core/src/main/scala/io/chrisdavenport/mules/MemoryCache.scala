@@ -17,7 +17,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private val onCacheHit: (K, V) => F[Unit],
   private val onCacheMiss: K => F[Unit],
   private val onDelete: K => F[Unit]
-)(implicit val F: Sync[F], val C: Clock[F]) extends CacheWithTimeout[F, K, V] {
+)(implicit val F: Sync[F], val C: Clock[F]) extends Cache[F, K, V] {
   import MemoryCache.MemoryCacheItem
 
   /**
