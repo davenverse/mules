@@ -108,14 +108,14 @@ class RefreshingCache[F[_]: Timer, K, V] private (
                      (recoverError: PartialFunction[Throwable, F[Unit]]): F[V] =
     lookup(k).flatMap {
       case Some(v) => v.pure[F]
-      case None => setupRefresh(k,
+      case None => setupRefresh(k, //only setup a referesh when the key is not found
         refresh,
         period,
         timeout,
         recoverError) *> fetchAndInsert(k, refresh, timeout)
     }
 
-
+  //Setup a refresh for a new `key` and `fetch`
   private def setupRefresh(k: K,
                            fetch: F[V],
                            period: TimeSpec,
@@ -124,25 +124,22 @@ class RefreshingCache[F[_]: Timer, K, V] private (
 
     def loop(): F[Unit] = {
       def doRefreshFetch = {
-        lookup(k).flatMap[RefreshResult] {
+        lookup(k).flatMap[RefreshResult] {  //Before fetch first double check if the k still exists
           case Some(_) => fetch.map[RefreshResult](Success(_))
             .recoverWith(recoverError.andThen(_.as(ErrorRecovered))).recover {
             case _ => ErrorUncovered
-          }
-          case None => NotFound.pure[F].widen
+          } //if the key exists, do the `fetch`, in case of an error, the custom `recoverError` is used to try recover it
+          case None => NotFound.pure[F].widen  //the key no longer exists
         }
       }
 
       for {
-        fiber <- Concurrent[F].start(
-          Timer[F].sleep(Duration.fromNanos(period.nanos)) >>
+        result <- Timer[F].sleep(Duration.fromNanos(period.nanos)) >>
             doRefreshFetch
-        )
-        result <- fiber.join
         r <- result match {
-          case Success(v) => insertWithTimeout(timeout)(k, v) >> loop()
-          case ErrorRecovered => loop()
-          case NotFound | ErrorUncovered => deregisterRefresh(k).void
+          case Success(v) => insertWithTimeout(timeout)(k, v) >> loop()  //fetch successful, insert the new value and continue loop
+          case ErrorRecovered => loop()  //fetch failed but recovered by error handler, no value to insert but can continue loop
+          case NotFound | ErrorUncovered => deregisterRefresh(k).void  //key already removed or fetch failed and not recoverd, stop the refresh 
         }
       } yield r
     }
