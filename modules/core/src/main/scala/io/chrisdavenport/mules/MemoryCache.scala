@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 import scala.collection.immutable.Map
 
 final class MemoryCache[F[_], K, V] private[MemoryCache] (
-  private val ref: Ref[F, Map[K, MemoryCache.MemoryCacheItem[V]]], 
+  private val ref: Ref[F, Map[K, MemoryCache.MemoryCacheItem[V]]],
   val defaultExpiration: Option[TimeSpec],
   private val onInsert: (K, V) => F[Unit],
   private val onCacheHit: (K, V) => F[Unit],
