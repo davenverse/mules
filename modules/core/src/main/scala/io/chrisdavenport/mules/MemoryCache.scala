@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 import scala.collection.immutable.Map
 
 final class MemoryCache[F[_], K, V] private[MemoryCache] (
-  private val ref: Ref[F, Map[K, MemoryCache.MemoryCacheItem[V]]], 
+  private val ref: Ref[F, Map[K, MemoryCache.MemoryCacheItem[V]]],
   val defaultExpiration: Option[TimeSpec],
   private val onInsert: (K, V) => F[Unit],
   private val onCacheHit: (K, V) => F[Unit],
@@ -75,7 +75,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
       .map(_.map(_.item))
       .flatMap{
         case s@Some(v) => onCacheHit(k, v).as(s)
-        case n@None => onCacheMiss(k).as(n)
+        case None => onCacheMiss(k).as(None)
       }
 
   /**
@@ -115,7 +115,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
       .map(_.map(_.item))
       .flatMap{
         case s@Some(v) => onCacheHit(k,v).as(s)
-        case n@None => onCacheMiss(k).as(n)
+        case None => onCacheMiss(k).as(None)
       }
 
   /**
