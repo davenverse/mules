@@ -27,31 +27,31 @@ jobs:
     - name: test 2.12
       scala: *scala_version_212
       script: sbt ++$TRAVIS_SCALA_VERSION test
-    -
-      name: mima
-      script: sbt +mimaReportBinaryIssues
-    -
-      name: docs
-      scala: *scala_version_212
-      install:
-        - rvm use 2.6.0 --install --fuzzy
-        - gem update --system
-        - gem install sass
-        - gem install jekyll -v 4.0.0
-      script: sbt ++$TRAVIS_SCALA_VERSION site/makeMicrosite
+    # -
+    #   name: mima
+    #   script: sbt +mimaReportBinaryIssues
+    # -
+    #   name: docs
+    #   scala: *scala_version_212
+    #   install:
+    #     - rvm use 2.6.0 --install --fuzzy
+    #     - gem update --system
+    #     - gem install sass
+    #     - gem install jekyll -v 4.0.0
+    #   script: sbt ++$TRAVIS_SCALA_VERSION site/makeMicrosite
     # run ci-release only if previous stages passed
     - stage: release
       name: release
       script: sbt ci-release
-    - stage: release
-      name: microsite
-      scala: *scala_version_212
-      install:
-        - rvm use 2.6.0 --install --fuzzy
-        - gem update --system
-        - gem install sass
-        - gem install jekyll -v 4.0.0
-      script: sbt ++$TRAVIS_SCALA_VERSION site/publishMicrosite
+    # - stage: release
+    #   name: microsite
+    #   scala: *scala_version_212
+    #   install:
+    #     - rvm use 2.6.0 --install --fuzzy
+    #     - gem update --system
+    #     - gem install sass
+    #     - gem install jekyll -v 4.0.0
+    #   script: sbt ++$TRAVIS_SCALA_VERSION site/publishMicrosite
 
 cache:
   directories:
