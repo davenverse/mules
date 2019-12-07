@@ -16,7 +16,6 @@ import io.chrisdavenport.mapref.implicits._
 import java.util.concurrent.ConcurrentHashMap
 
 final class MemoryCache[F[_], K, V] private[MemoryCache] (
-  // private val ref: Ref[F, Map[K, MemoryCache.MemoryCacheItem[V]]],
   private val mapRef: MapRef[F, K, Option[MemoryCache.MemoryCacheItem[V]]],
   val keys: F[Chain[K]], // Passed In From External Defined State
   private val purgeExpiredEntries : Long => F[Chain[K]],
@@ -374,13 +373,17 @@ object MemoryCache {
   private object CHashMap {
     def keys[F[_]: Sync, K, V](chm: ConcurrentHashMap[K, V]): F[Chain[K]] = Sync[F].delay{
       val k = chm.keys()
-      val i = Iterator.continually((k, k.nextElement()))
+      val i = {
+        if (k == null) Iterator.empty
+        else Iterator.continually((k, k.nextElement()))
+      }
         .takeWhile(_._1.hasMoreElements)
         .map(_._2)
         .toSeq
       Chain.fromSeq(i)
     }
 
+    // Initial Implementation, almost certainly there is a better way to do with the ConcurrentHashMap internals
     def purgeExpiredEntries[F[_]: Sync, K, V](chm: ConcurrentHashMap[K, MemoryCacheItem[V]])(now: Long): F[Chain[K]] = Sync[F].delay{
       val timeSpec = TimeSpec.unsafeFromNanos(now)
       val i = {
@@ -390,7 +393,7 @@ object MemoryCache {
         }
         .takeWhile(_._1.hasMoreElements)
         .map(_._2)
-        .flatMap{k => 
+        .flatMap{k =>
           val init = chm.get(k)
           if (init == null) Iterator.empty
           else {
