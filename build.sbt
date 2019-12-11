@@ -4,6 +4,13 @@ lazy val mules = project.in(file("."))
   .settings(commonSettings)
   .aggregate(core, reload)
 
+lazy val bench = project.in(file("modules/bench"))
+  .disablePlugins(MimaPlugin)
+  .enablePlugins(JmhPlugin)
+  .settings(skip in publish := true)
+  .settings(commonSettings)
+  .dependsOn(core)
+
 lazy val core = project.in(file("modules/core"))
   .settings(commonSettings)
   .settings(
