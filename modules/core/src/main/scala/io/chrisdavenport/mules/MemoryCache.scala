@@ -29,19 +29,16 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private def purgeExpiredEntriesDefault(l: Long): F[List[K]] = {
     val timeSpec = TimeSpec.unsafeFromNanos(l)
     keys.flatMap(l => 
-      l.traverse(k => 
+      l.flatTraverse(k => 
         mapRef(k).modify(optItem => 
           optItem.map(item => 
             if (MemoryCache.isExpired(timeSpec, item)) 
-              (None, true)
+              (None, List(k))
             else 
-              (optItem, false)
-          ).getOrElse((optItem, false))
-        ).map{ b => 
-          if (b) List(k)
-          else List.empty[K]
-        }
-      ).map(_.flatten)
+              (optItem, List.empty)
+          ).getOrElse((optItem, List.empty))
+        )
+      )
     )
   }
 
