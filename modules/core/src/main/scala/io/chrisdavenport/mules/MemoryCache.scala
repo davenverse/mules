@@ -23,14 +23,15 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private val onDelete: K => F[Unit]
 )(implicit val F: Sync[F], val C: Clock[F]) extends Cache[F, K, V] {
   import MemoryCache.MemoryCacheItem
+  private val noneF: F[None.type] = Applicative[F].pure(None)
+  private def noneFA[A]: F[Option[A]] = noneF.widen
 
-  private def purgeExpiredEntriesDefault(l: Long): F[List[K]] = {
-    val timeSpec = TimeSpec.unsafeFromNanos(l)
+  private def purgeExpiredEntriesDefault(now: Long): F[List[K]] = {
     keys.flatMap(l => 
       l.flatTraverse(k => 
         mapRef(k).modify(optItem => 
           optItem.map(item => 
-            if (MemoryCache.isExpired(timeSpec, item)) 
+            if (MemoryCache.isExpired(now, item)) 
               (None, List(k))
             else 
               (optItem, List.empty)
@@ -86,36 +87,26 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    * 
    * The function will eagerly delete the item from the cache if it is expired.
    **/
-  def lookup(k: K): F[Option[V]] = 
+  def lookup(k: K): F[Option[V]] = {
     C.monotonic(NANOSECONDS)
-      .flatMap(now => lookupItemT(true, k, TimeSpec.unsafeFromNanos(now)))
+      .flatMap{now =>
+        mapRef(k).modify[F[Option[MemoryCacheItem[V]]]]{
+          case s@Some(value) => 
+            if (MemoryCache.isExpired(now, value)){
+              (None, onDelete(k).as(None))
+            } else {
+              (s, F.pure(s))
+            }
+          case None => 
+            (None, noneFA)
+        }
+      }
+      .flatten
       .map(_.map(_.item))
       .flatMap{
         case s@Some(v) => onCacheHit(k, v).as(s)
         case None => onCacheMiss(k).as(None)
       }
-
-  /**
-   * Internal Function Used for Lookup and management of values.
-   * If isExpired and The boolean for delete is present then we delete,
-   * otherwise return the value.
-   **/
-  private def lookupItemT(del: Boolean, k: K, t: TimeSpec): F[Option[MemoryCacheItem[V]]] = {
-    for {
-      (i, gotDeleted) <- {
-        mapRef(k).modify{ value =>
-          val exp = value.map(MemoryCache.isExpired(t, _)).getOrElse(false)
-          val willRemove = del && exp
-          val newValOpt = Alternative[Option].guard(!willRemove)
-          val nonExpiredValue = Alternative[Option].guard(!exp) *> value
-          val out = (newValOpt *> value, (nonExpiredValue, willRemove))
-          out
-        }
-      }
-      out <- if (gotDeleted) {
-        onDelete(k).as(Option.empty[MemoryCacheItem[V]])
-      } else i.pure[F]
-    } yield out
   }
 
   /**
@@ -127,7 +118,15 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    **/
   def lookupNoUpdate(k: K): F[Option[V]] = 
     C.monotonic(NANOSECONDS)
-      .flatMap(now => lookupItemT(false, k, TimeSpec.unsafeFromNanos(now)))
+      .flatMap{now => 
+        mapRef(k).get.map(
+          _.flatMap(ci => 
+            Alternative[Option].guard(
+              !MemoryCache.isExpired(now, ci)
+            ).as(ci)
+          )
+        )
+      }
       .map(_.map(_.item))
       .flatMap{
         case s@Some(v) => onCacheHit(k,v).as(s)
@@ -385,10 +384,9 @@ object MemoryCache {
     def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, MemoryCacheItem[V]]])(now: Long): F[List[K]] = {
       ref.modify(
         m => {
-          val timeSpec = TimeSpec.unsafeFromNanos(now)
           val l = scala.collection.mutable.ListBuffer.empty[K]
           m.foreach{ case (k, item) => 
-            if (isExpired(timeSpec, item)) {
+            if (isExpired(now, item)) {
               l.+=(k)
             }
           }
@@ -400,9 +398,9 @@ object MemoryCache {
     }
   }  
 
-  private def isExpired[A](checkAgainst: TimeSpec, cacheItem: MemoryCacheItem[A]): Boolean = {
-    cacheItem.itemExpiration.fold(false){
-      case e if e.nanos < checkAgainst.nanos => true
+  private def isExpired[A](checkAgainst: Long, cacheItem: MemoryCacheItem[A]): Boolean = {
+    cacheItem.itemExpiration match{ 
+      case Some(e) if e.nanos < checkAgainst => true
       case _ => false
     }
   }
