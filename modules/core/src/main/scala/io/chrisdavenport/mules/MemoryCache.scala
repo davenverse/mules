@@ -1,7 +1,7 @@
 package io.chrisdavenport.mules
 
 import cats._
-import cats.data._
+// import cats.data._
 import cats.effect._
 // For Cats-effect 1.0
 import cats.effect.concurrent.Ref
@@ -17,8 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private val mapRef: MapRef[F, K, Option[MemoryCache.MemoryCacheItem[V]]],
-  val keys: F[Chain[K]], // Passed In From External Defined State
-  private val purgeExpiredEntries : Long => F[Chain[K]],
+  private val purgeExpiredEntriesOpt : Option[Long => F[List[K]]], // Optional Performance Improvement over Default
   val defaultExpiration: Option[TimeSpec],
   private val onInsert: (K, V) => F[Unit],
   private val onCacheHit: (K, V) => F[Unit],
@@ -26,6 +25,30 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private val onDelete: K => F[Unit]
 )(implicit val F: Sync[F], val C: Clock[F]) extends Cache[F, K, V] {
   import MemoryCache.MemoryCacheItem
+
+  private def purgeExpiredEntriesDefault(l: Long): F[List[K]] = {
+    val timeSpec = TimeSpec.unsafeFromNanos(l)
+    keys.flatMap(l => 
+      l.traverse(k => 
+        mapRef(k).modify(optItem => 
+          optItem.map(item => 
+            if (MemoryCache.isExpired(timeSpec, item)) 
+              (None, true)
+            else 
+              (optItem, false)
+          ).getOrElse((optItem, false))
+        ).map{ b => 
+          if (b) List(k)
+          else List.empty[K]
+        }
+      ).map(_.flatten)
+    )
+  }
+
+  val purgeExpiredEntries: Long => F[List[K]] = 
+    purgeExpiredEntriesOpt.getOrElse(purgeExpiredEntriesDefault)
+
+  val keys : F[List[K]] = mapRef.keys
 
   /**
    * Delete an item from the cache. Won't do anything if the item is not present.
@@ -54,9 +77,6 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
       _ <- onInsert(k, v)
     } yield ()
   }
-    
-
-  
 
   /**
    * Return all keys present in the cache, including expired items.
@@ -126,8 +146,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def setDefaultExpiration(defaultExpiration: Option[TimeSpec]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       onInsert,
       onCacheHit,
@@ -141,8 +160,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def setOnCacheHit(onCacheHitNew: (K, V) => F[Unit]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       onInsert,
       onCacheHitNew,
@@ -156,8 +174,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def setOnCacheMiss(onCacheMissNew: K => F[Unit]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       onInsert,
       onCacheHit,
@@ -170,8 +187,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def setOnDelete(onDeleteNew: K => F[Unit]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       onInsert,
       onCacheHit,
@@ -185,8 +201,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def setOnInsert(onInsertNew: (K, V) => F[Unit]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       onInsertNew,
       onCacheHit,
@@ -198,11 +213,8 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Return the size of the cache, including expired items.
    **/
-  def size: F[Long] = 
+  def size: F[Int] = 
     keys.map(_.size)
-
-
-
 
   /**
    * Delete all items that are expired.
@@ -212,8 +224,8 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def purgeExpired: F[Unit] = {
     for {
       now <- C.monotonic(NANOSECONDS)
-      chain <- purgeExpiredEntries(now)
-      _ <- chain.traverse_(onDelete)
+      out <- purgeExpiredEntriesDefault(now)
+      _ <-  out.traverse_(onDelete)
     } yield ()
   }
   
@@ -223,8 +235,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def withOnCacheHit(onCacheHitNew: (K, V) => F[Unit]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       onInsert,
       {(k, v) => onCacheHit(k, v) >> onCacheHitNew(k, v)},
@@ -238,8 +249,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def withOnCacheMiss(onCacheMissNew: K => F[Unit]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       onInsert,
       onCacheHit,
@@ -253,8 +263,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def withOnDelete(onDeleteNew: K => F[Unit]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       onInsert,
       onCacheHit,
@@ -268,8 +277,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def withOnInsert(onInsertNew: (K, V) => F[Unit]): MemoryCache[F, K, V] = 
     new MemoryCache[F, K, V](
       mapRef,
-      keys,
-      purgeExpiredEntries,
+      purgeExpiredEntriesOpt,
       defaultExpiration,
       {(k, v) => onInsert(k, v) >> onInsertNew(k, v)},
       onCacheHit,
@@ -319,14 +327,29 @@ object MemoryCache {
     Ref.of[F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
       .map(ref => new MemoryCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
-        SingleRef.keys(ref),
-        SingleRef.purgeExpiredEntries(ref)(_),
+        {l: Long => SingleRef.purgeExpiredEntries(ref)(l)}.some,
         defaultExpiration,
         {(_, _) => Sync[F].unit},
         {(_, _) => Sync[F].unit},
         {_: K => Sync[F].unit},
         {_: K => Sync[F].unit}
       ))
+
+  def ofShardedImmutableMap[F[_]: Sync : Clock, K, V](
+    shardCount: Int,
+    defaultExpiration: Option[TimeSpec]
+  ): F[MemoryCache[F, K, V]] = 
+    MapRef.ofShardedImmutableMap[F, K, MemoryCacheItem[V]](shardCount).map{
+      new MemoryCache[F, K, V](
+        _,
+        None,
+        defaultExpiration,
+        {(_, _) => Sync[F].unit},
+        {(_, _) => Sync[F].unit},
+        {_: K => Sync[F].unit},
+        {_: K => Sync[F].unit}
+      )
+    }
 
   def ofConcurrentHashMap[F[_]: Sync: Clock, K, V](
     defaultExpiration: Option[TimeSpec],
@@ -337,8 +360,7 @@ object MemoryCache {
     val chm = new ConcurrentHashMap[K, MemoryCacheItem[V]](initialCapacity, loadFactor, concurrencyLevel)
     new MemoryCache[F, K, V](
       MapRef.fromConcurrentHashMap(chm),
-      CHashMap.keys(chm),
-      CHashMap.purgeExpiredEntries(chm)(_),
+      None,
       defaultExpiration,
       {(_, _) => Sync[F].unit},
       {(_, _) => Sync[F].unit},
@@ -347,18 +369,35 @@ object MemoryCache {
     )
   }
 
+  def ofMapRef[F[_]: Sync: Clock, K, V](
+    mr: MapRef[F, K, Option[MemoryCacheItem[V]]],
+    defaultExpiration: Option[TimeSpec]
+  ): MemoryCache[F, K, V] = {
+    new MemoryCache[F, K, V](
+        mr,
+        None,
+        defaultExpiration,
+        {(_, _) => Sync[F].unit},
+        {(_, _) => Sync[F].unit},
+        {_: K => Sync[F].unit},
+        {_: K => Sync[F].unit}
+      )
+  }
+
 
   private object SingleRef {
-    def keys[F[_]: Functor, K, V](ref: Ref[F, Map[K, V]]): F[Chain[K]] = ref.get.map(m => Chain.fromSeq(m.keys.toSeq))
 
-    def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, MemoryCacheItem[V]]])(now: Long): F[Chain[K]] = {
+    def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, MemoryCacheItem[V]]])(now: Long): F[List[K]] = {
       ref.modify(
         m => {
-          m.keys.toList
-            .foldLeft((m, Chain.empty[K])){ case ((m, acc), k) => 
+          val l = scala.collection.mutable.ListBuffer.empty[K]
+          val finalM = m.keys.toList
+            .foldLeft(m){ case (m, k) => 
               val (mOut, maybeDeleted) = purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now))
-              maybeDeleted.fold((mOut, acc))(kv => (mOut, acc :+ kv))
+              maybeDeleted.foreach(k => l.+=(k))
+              mOut
             }
+          (finalM, l.result())
         }
       )
     }
@@ -369,50 +408,7 @@ object MemoryCache {
           else (m, None)
         )
         .getOrElse((m, None))
-  }
-  private object CHashMap {
-    def keys[F[_]: Sync, K, V](chm: ConcurrentHashMap[K, V]): F[Chain[K]] = Sync[F].delay{
-      val k = chm.keys()
-      val i = {
-        if (k == null) Iterator.empty
-        else Iterator.continually((k, k.nextElement()))
-      }
-        .takeWhile(_._1.hasMoreElements)
-        .map(_._2)
-        .toSeq
-      Chain.fromSeq(i)
-    }
-
-    // Initial Implementation, almost certainly there is a better way to do with the ConcurrentHashMap internals
-    def purgeExpiredEntries[F[_]: Sync, K, V](chm: ConcurrentHashMap[K, MemoryCacheItem[V]])(now: Long): F[Chain[K]] = Sync[F].delay{
-      val timeSpec = TimeSpec.unsafeFromNanos(now)
-      val i = {
-          val keys = chm.keys()
-          if (keys == null) Iterator.empty
-          else Iterator.continually((keys, keys.nextElement()))
-        }
-        .takeWhile(_._1.hasMoreElements)
-        .map(_._2)
-        .flatMap{k =>
-          val init = chm.get(k)
-          if (init == null) Iterator.empty
-          else {
-            if (isExpired(timeSpec, init)) {
-              chm.remove(k)
-              Iterator(k)
-            }
-            else Iterator.empty
-          }
-        
-        }.toSeq
-      Chain.fromSeq(i)
-
-    }
-  }
-
-  
-
-
+  }  
 
   private def isExpired[A](checkAgainst: TimeSpec, cacheItem: MemoryCacheItem[A]): Boolean = {
     cacheItem.itemExpiration.fold(false){
