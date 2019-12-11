@@ -1,9 +1,7 @@
 package io.chrisdavenport.mules
 
 import cats._
-// import cats.data._
 import cats.effect._
-// For Cats-effect 1.0
 import cats.effect.concurrent.Ref
 import cats.effect.syntax.concurrent._
 import cats.implicits._
@@ -389,11 +387,9 @@ object MemoryCache {
         m => {
           val timeSpec = TimeSpec.unsafeFromNanos(now)
           val l = scala.collection.mutable.ListBuffer.empty[K]
-          m.keys.foreach{ k => 
-            m.get(k).foreach{item => 
-              if (isExpired(timeSpec, item)) {
-                l.+=(k)
-              }
+          m.foreach{ case (k, item) => 
+            if (isExpired(timeSpec, item)) {
+              l.+=(k)
             }
           }
           val remove = l.result
