@@ -390,24 +390,21 @@ object MemoryCache {
     def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, MemoryCacheItem[V]]])(now: Long): F[List[K]] = {
       ref.modify(
         m => {
+          val timeSpec = TimeSpec.unsafeFromNanos(now)
           val l = scala.collection.mutable.ListBuffer.empty[K]
-          val finalM = m.keys.toList
-            .foldLeft(m){ case (m, k) => 
-              val (mOut, maybeDeleted) = purgeKeyIfExpired(m, k, TimeSpec.unsafeFromNanos(now))
-              maybeDeleted.foreach(k => l.+=(k))
-              mOut
+          m.keys.foreach{ k => 
+            m.get(k).foreach{item => 
+              if (isExpired(timeSpec, item)) {
+                l.+=(k)
+              }
             }
-          (finalM, l.result())
+          }
+          val remove = l.result
+          val finalMap = m -- remove
+          (finalMap, remove)
         }
       )
     }
-    private def purgeKeyIfExpired[K, V](m: Map[K, MemoryCacheItem[V]], k: K, checkAgainst: TimeSpec): (Map[K, MemoryCacheItem[V]], Option[K]) = 
-      m.get(k)
-        .map(item => 
-          if (isExpired(checkAgainst, item)) ((m - (k)), k.some) 
-          else (m, None)
-        )
-        .getOrElse((m, None))
   }  
 
   private def isExpired[A](checkAgainst: TimeSpec, cacheItem: MemoryCacheItem[A]): Boolean = {
