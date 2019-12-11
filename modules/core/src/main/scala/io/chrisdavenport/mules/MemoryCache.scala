@@ -224,7 +224,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def purgeExpired: F[Unit] = {
     for {
       now <- C.monotonic(NANOSECONDS)
-      out <- purgeExpiredEntriesDefault(now)
+      out <- purgeExpiredEntries(now)
       _ <-  out.traverse_(onDelete)
     } yield ()
   }
