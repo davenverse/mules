@@ -6,6 +6,7 @@ trait Lookup[F[_], K, V]{
 
 trait Insert[F[_], K, V]{
   def insert(k: K, v: V): F[Unit]
+  def insertWithTimeout(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit]
 }
 
 trait Delete[F[_], K]{
