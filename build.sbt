@@ -2,7 +2,7 @@ lazy val mules = project.in(file("."))
   .disablePlugins(MimaPlugin)
   .settings(skip in publish := true)
   .settings(commonSettings)
-  .aggregate(core, reload)
+  .aggregate(core, reload, noop)
 
 lazy val bench = project.in(file("modules/bench"))
   .disablePlugins(MimaPlugin)
@@ -15,6 +15,13 @@ lazy val core = project.in(file("modules/core"))
   .settings(commonSettings)
   .settings(
     name := "mules"
+  )
+
+lazy val noop = project.in(file("modules/noop"))
+  .settings(commonSettings)
+  .dependsOn(core)
+  .settings(
+    name := "mules-noop"
   )
 
 lazy val reload = project.in(file("modules/reload"))
