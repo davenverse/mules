@@ -11,21 +11,21 @@ import io.chrisdavenport.mapref.MapRef
 
 import java.util.concurrent.ConcurrentHashMap
 
-final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
-  private val mapRef: MapRef[F, K, Option[AtomicSetCache.AtomicSetCacheItem[F, V]]],
+final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
+  private val mapRef: MapRef[F, K, Option[DispatchOneCache.DispatchOneCacheItem[F, V]]],
   private val purgeExpiredEntriesOpt : Option[Long => F[List[K]]], // Optional Performance Improvement over Default
   val defaultExpiration: Option[TimeSpec],
   private val createItem: K => F[V]
 )(implicit val F: Concurrent[F], val C: Clock[F]) extends GetCache[F, K, V] {
-  import AtomicSetCache.AtomicSetCacheItem
-  import AtomicSetCache.CancelationDuringAtomicSetCacheInsertProcessing
+  import DispatchOneCache.DispatchOneCacheItem
+  import DispatchOneCache.CancelationDuringDispatchOneCacheInsertProcessing
 
   private def purgeExpiredEntriesDefault(now: Long): F[List[K]] = {
     mapRef.keys.flatMap(l => 
       l.flatTraverse(k => 
         mapRef(k).modify(optItem => 
           optItem.map(item => 
-            if (AtomicSetCache.isExpired(now, item)) 
+            if (DispatchOneCache.isExpired(now, item)) 
               (None, List(k))
             else 
               (optItem, List.empty)
@@ -45,12 +45,12 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
         C.monotonic(NANOSECONDS).flatMap{ now =>
         val timeout = defaultExpiration.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
         mapRef(k).modify{
-          case None => (AtomicSetCacheItem[F, V](deferred, timeout).some, deferred.some)
+          case None => (DispatchOneCacheItem[F, V](deferred, timeout).some, deferred.some)
           case s@Some(_) => (s, None)
         }}
       }
 
-  private val updateIfFailedThenCreate: (K, AtomicSetCacheItem[F, V]) => F[Option[TryableDeferred[F, Either[Throwable, V]]]] = 
+  private val updateIfFailedThenCreate: (K, DispatchOneCacheItem[F, V]) => F[Option[TryableDeferred[F, Either[Throwable, V]]]] = 
     (k, cacheItem) => cacheItem.item.tryGet.flatMap{
       case Some(Left(_)) => 
         mapRef(k).modify{ 
@@ -73,7 +73,7 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
         maybeDeferred.bracketCase(_.traverse_{ deferred => 
           createItem(k).attempt.flatMap(e => deferred.complete(e).attempt.void)
         }){
-          case (Some(deferred), ExitCase.Canceled) => deferred.complete(CancelationDuringAtomicSetCacheInsertProcessing.asLeft).attempt.void
+          case (Some(deferred), ExitCase.Canceled) => deferred.complete(CancelationDuringDispatchOneCacheInsertProcessing.asLeft).attempt.void
           case (Some(deferred), ExitCase.Error(e)) => deferred.complete(e.asLeft).attempt.void
           case _ => F.unit
         }
@@ -88,7 +88,7 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
     setAs = v.asRight
     _ <- defered.complete(setAs)
     now <- C.monotonic(NANOSECONDS)
-    item = AtomicSetCacheItem(defered, defaultExpiration.map(spec => TimeSpec.unsafeFromNanos(now + spec.nanos))).some
+    item = DispatchOneCacheItem(defered, defaultExpiration.map(spec => TimeSpec.unsafeFromNanos(now + spec.nanos))).some
     action <- mapRef(k).modify{
       case None => 
         (item, F.unit)
@@ -107,7 +107,7 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
     setAs = v.asRight
     _ <- defered.complete(setAs)
     now <- C.monotonic(NANOSECONDS)
-    item = AtomicSetCacheItem(defered, optionTimeout.map(spec => TimeSpec.unsafeFromNanos(now + spec.nanos))).some
+    item = DispatchOneCacheItem(defered, optionTimeout.map(spec => TimeSpec.unsafeFromNanos(now + spec.nanos))).some
     action <- mapRef(k).modify{
       case None => 
         (item, F.unit)
@@ -131,9 +131,9 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
   def get(k: K): F[V] = {
     C.monotonic(NANOSECONDS)
       .flatMap{now =>
-        mapRef(k).modify[Option[AtomicSetCacheItem[F, V]]]{
+        mapRef(k).modify[Option[DispatchOneCacheItem[F, V]]]{
           case s@Some(value) => 
-            if (AtomicSetCache.isExpired(now, value)){
+            if (DispatchOneCache.isExpired(now, value)){
               (None, None)
             } else {
               (s, s)
@@ -153,10 +153,10 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
 
   /**
    * Change the default expiration value of newly added cache items. Shares an underlying reference
-   * with the other cache. Use copyAtomicSetCache if you want different caches.
+   * with the other cache. Use copyDispatchOneCache if you want different caches.
    **/
-  def setDefaultExpiration(defaultExpiration: Option[TimeSpec]): AtomicSetCache[F, K, V] = 
-    new AtomicSetCache[F, K, V](
+  def setDefaultExpiration(defaultExpiration: Option[TimeSpec]): DispatchOneCache[F, K, V] = 
+    new DispatchOneCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
       defaultExpiration,
@@ -175,32 +175,32 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
 
 }
 
-object AtomicSetCache {
-  private case class AtomicSetCacheItem[F[_], A](
+object DispatchOneCache {
+  private case class DispatchOneCacheItem[F[_], A](
     item: TryableDeferred[F, Either[Throwable, A]],
     itemExpiration: Option[TimeSpec]
   )
-  private case object CancelationDuringAtomicSetCacheInsertProcessing extends scala.util.control.NoStackTrace
+  private case object CancelationDuringDispatchOneCacheInsertProcessing extends scala.util.control.NoStackTrace
 
   /**
    *
    * Initiates a background process that checks for expirations every certain amount of time.
    *
-   * @param AtomicSetCache: The cache to check and expire automatically.
+   * @param DispatchOneCache: The cache to check and expire automatically.
    * @param checkOnExpirationsEvery: How often the expiration process should check for expired keys.
    *
    * @return an `Resource[F, Unit]` that will keep removing expired entries in the background.
    **/
   def liftToAuto[F[_]: Concurrent: Timer, K, V](
-    AtomicSetCache: AtomicSetCache[F, K, V],
+    DispatchOneCache: DispatchOneCache[F, K, V],
     checkOnExpirationsEvery: TimeSpec
   ): Resource[F, Unit] = {
-    def runExpiration(cache: AtomicSetCache[F, K, V]): F[Unit] = {
+    def runExpiration(cache: DispatchOneCache[F, K, V]): F[Unit] = {
       val check = TimeSpec.toDuration(checkOnExpirationsEvery)
       Timer[F].sleep(check) >> cache.purgeExpired >> runExpiration(cache)
     }
 
-    Resource.make(runExpiration(AtomicSetCache).start)(_.cancel).void
+    Resource.make(runExpiration(DispatchOneCache).start)(_.cancel).void
   }
 
   /**
@@ -211,9 +211,9 @@ object AtomicSetCache {
   def ofSingleImmutableMap[F[_]: Concurrent: Clock, K, V](
     createAction: K => F[V],
     defaultExpiration: Option[TimeSpec]
-  ): F[AtomicSetCache[F, K, V]] = 
-    Ref.of[F, Map[K, AtomicSetCacheItem[F, V]]](Map.empty[K, AtomicSetCacheItem[F, V]])
-      .map(ref => new AtomicSetCache[F, K, V](
+  ): F[DispatchOneCache[F, K, V]] = 
+    Ref.of[F, Map[K, DispatchOneCacheItem[F, V]]](Map.empty[K, DispatchOneCacheItem[F, V]])
+      .map(ref => new DispatchOneCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
         {l: Long => SingleRef.purgeExpiredEntries(ref)(l)}.some,
         defaultExpiration,
@@ -224,9 +224,9 @@ object AtomicSetCache {
     createAction: K => F[V],
     shardCount: Int,
     defaultExpiration: Option[TimeSpec]
-  ): F[AtomicSetCache[F, K, V]] = 
-    MapRef.ofShardedImmutableMap[F, K, AtomicSetCacheItem[F, V]](shardCount).map{
-      new AtomicSetCache[F, K, V](
+  ): F[DispatchOneCache[F, K, V]] = 
+    MapRef.ofShardedImmutableMap[F, K, DispatchOneCacheItem[F, V]](shardCount).map{
+      new DispatchOneCache[F, K, V](
         _,
         None,
         defaultExpiration,
@@ -240,9 +240,9 @@ object AtomicSetCache {
     initialCapacity: Int = 16,
     loadFactor: Float = 0.75f,
     concurrencyLevel: Int = 16,
-  ): F[AtomicSetCache[F, K, V]] = Sync[F].delay{
-    val chm = new ConcurrentHashMap[K, AtomicSetCacheItem[F, V]](initialCapacity, loadFactor, concurrencyLevel)
-    new AtomicSetCache[F, K, V](
+  ): F[DispatchOneCache[F, K, V]] = Sync[F].delay{
+    val chm = new ConcurrentHashMap[K, DispatchOneCacheItem[F, V]](initialCapacity, loadFactor, concurrencyLevel)
+    new DispatchOneCache[F, K, V](
       MapRef.fromConcurrentHashMap(chm),
       None,
       defaultExpiration,
@@ -252,10 +252,10 @@ object AtomicSetCache {
 
   def ofMapRef[F[_]: Concurrent: Clock, K, V](
     createAction: K => F[V],
-    mr: MapRef[F, K, Option[AtomicSetCacheItem[F, V]]],
+    mr: MapRef[F, K, Option[DispatchOneCacheItem[F, V]]],
     defaultExpiration: Option[TimeSpec]
-  ): AtomicSetCache[F, K, V] = {
-    new AtomicSetCache[F, K, V](
+  ): DispatchOneCache[F, K, V] = {
+    new DispatchOneCache[F, K, V](
         mr,
         None,
         defaultExpiration,
@@ -266,7 +266,7 @@ object AtomicSetCache {
 
   private object SingleRef {
 
-    def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, AtomicSetCacheItem[F, V]]])(now: Long): F[List[K]] = {
+    def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, DispatchOneCacheItem[F, V]]])(now: Long): F[List[K]] = {
       ref.modify(
         m => {
           val l = scala.collection.mutable.ListBuffer.empty[K]
@@ -283,7 +283,7 @@ object AtomicSetCache {
     }
   }  
 
-  private def isExpired[F[_], A](checkAgainst: Long, cacheItem: AtomicSetCacheItem[F, A]): Boolean = {
+  private def isExpired[F[_], A](checkAgainst: Long, cacheItem: DispatchOneCacheItem[F, A]): Boolean = {
     cacheItem.itemExpiration match{ 
       case Some(e) if e.nanos < checkAgainst => true
       case _ => false
