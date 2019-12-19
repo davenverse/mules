@@ -148,7 +148,7 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
           case Right(v) => F.pure(v)
         }
         case None => insertAtomic(k) >> get(k)
-      }
+      } 
   }
 
   /**

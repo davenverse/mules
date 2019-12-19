@@ -40,16 +40,27 @@ class AtomicSetCacheSpec extends Specification with CatsIO {
       } yield testValue must_=== 5
     }
 
+    "insert places a value" in {
+      for {
+        cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => IO.pure(5), None)
+        _ <- cache.insert((), 1)
+        now <- cache.get(())
+      } yield {
+        now must_=== 1
+      }
+    }
+
     "insert overrides background action" in {
       for {
         cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => IO.never, None)
-        first <- cache.get(()).timeout(2.seconds).attempt.start
+        first <- cache.get(()).start
         second <- cache.get(()).start
         _ <- cache.insert((), 1)
         resultSecond <- second.join
         _ <- first.cancel
       } yield {
         resultSecond must_=== 1
+      
       }
     }
 
