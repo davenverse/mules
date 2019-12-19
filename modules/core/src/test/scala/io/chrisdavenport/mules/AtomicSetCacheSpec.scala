@@ -50,19 +50,30 @@ class AtomicSetCacheSpec extends Specification with CatsIO {
       }
     }
 
-    "insert overrides background action" in {
+    "insert overrides background action for first action get" in {
       for {
-        cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => IO.never, None)
+        cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => Timer[IO].sleep(5.seconds).as(5), None)
+        first <- cache.get(()).start
+        _ <- cache.insert((), 1)
+        value <- first.join
+      } yield {
+        value must_=== 1
+      }
+    }
+
+    "insert overrides background action for secondary action get" in {
+      for {
+        cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => Timer[IO].sleep(5.seconds).as(5), None)
         first <- cache.get(()).start
         second <- cache.get(()).start
         _ <- cache.insert((), 1)
         resultSecond <- second.join
-        _ <- first.cancel
+        _ <- first.cancel.timeout(1.second).attempt.void
       } yield {
         resultSecond must_=== 1
-      
       }
     }
+
 
     "insert overrides set value" in {
       for {
