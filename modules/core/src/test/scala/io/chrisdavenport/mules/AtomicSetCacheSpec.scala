@@ -14,10 +14,10 @@ class AtomicSetCacheSpec extends Specification with CatsIO {
     "only run once" in {
       for {
         ref <- Ref[IO].of(0)
-        cache <- AtomicSetCache.ofConcurrentHashMap[IO, Unit, Int](_ => Timer[IO].sleep(1.second) >> ref.modify(i => (i+1, i)), None)
-        first <- cache.lookupOrGet(()).start
-        second <- cache.lookupOrGet(()).start
-        third <- cache.lookupOrGet(()).start
+        cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => Timer[IO].sleep(1.second) >> ref.modify(i => (i+1, i)), None)
+        first <- cache.get(()).start
+        second <- cache.get(()).start
+        third <- cache.get(()).start
         _ <- first.join
         _ <- second.join
         _ <- third.join
@@ -29,10 +29,10 @@ class AtomicSetCacheSpec extends Specification with CatsIO {
       for {
         ref <- Ref[IO].of(0)
         errorFunction = ref.modify(i => (i+1, if (i > 3) i.pure[IO] else  Timer[IO].sleep(1.second) >> IO.raiseError(new Throwable("whoopsie")))).flatten
-        cache <- AtomicSetCache.ofConcurrentHashMap[IO, Unit, Int](_ => errorFunction, None)
-        first <- cache.lookupOrGet(()).start
-        second <- cache.lookupOrGet(()).start
-        third <- cache.lookupOrGet(()).start
+        cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => errorFunction, None)
+        first <- cache.get(()).start
+        second <- cache.get(()).start
+        third <- cache.get(()).start
         _ <- first.join
         _ <- second.join
         _ <- third.join
@@ -40,5 +40,29 @@ class AtomicSetCacheSpec extends Specification with CatsIO {
       } yield testValue must_=== 5
     }
 
+    "insert overrides background action" in {
+      for {
+        cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => IO.never, None)
+        first <- cache.get(()).timeout(2.seconds).attempt.start
+        second <- cache.get(()).start
+        _ <- cache.insert((), 1)
+        resultSecond <- second.join
+        _ <- first.cancel
+      } yield {
+        resultSecond must_=== 1
+      }
+    }
+
+    "insert overrides set value" in {
+      for {
+        cache <- AtomicSetCache.ofSingleImmutableMap[IO, Unit, Int](_ => IO.pure(2), None)
+        first <- cache.get(())
+        _ <- cache.insert((), 1)
+        second <- cache.get(())
+      } yield {
+        (first,second).must_===((2, 1))
+        
+      }
+    }
   }
 }

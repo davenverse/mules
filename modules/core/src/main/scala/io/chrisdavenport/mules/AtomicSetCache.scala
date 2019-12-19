@@ -16,7 +16,7 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
   private val purgeExpiredEntriesOpt : Option[Long => F[List[K]]], // Optional Performance Improvement over Default
   val defaultExpiration: Option[TimeSpec],
   private val createItem: K => F[V]
-)(implicit val F: Concurrent[F], val C: Clock[F]) extends Lookup[F, K, V] {
+)(implicit val F: Concurrent[F], val C: Clock[F]) extends GetCache[F, K, V] {
   import AtomicSetCache.AtomicSetCacheItem
   import AtomicSetCache.CancelationDuringAtomicSetCacheInsertProcessing
 
@@ -40,46 +40,86 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
 
   private val emptyFV = F.pure(Option.empty[TryableDeferred[F, Either[Throwable, V]]])
 
-  private def insertAtomic(k: K, optionTimeout: Option[TimeSpec]): F[Unit] = {
-    def createEmptyIfUnset: F[Option[TryableDeferred[F, Either[Throwable, V]]]] = 
-      Deferred.tryable[F, Either[Throwable, V]].flatMap{deferred => 
+  private val createEmptyIfUnset: K => F[Option[TryableDeferred[F, Either[Throwable, V]]]] = 
+      k => Deferred.tryable[F, Either[Throwable, V]].flatMap{deferred => 
         C.monotonic(NANOSECONDS).flatMap{ now =>
-        val timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
+        val timeout = defaultExpiration.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
         mapRef(k).modify{
           case None => (AtomicSetCacheItem[F, V](deferred, timeout).some, deferred.some)
           case s@Some(_) => (s, None)
         }}
       }
 
+  private val updateIfFailedThenCreate: (K, AtomicSetCacheItem[F, V]) => F[Option[TryableDeferred[F, Either[Throwable, V]]]] = 
+    (k, cacheItem) => cacheItem.item.tryGet.flatMap{
+      case Some(Left(_)) => 
+        mapRef(k).modify{ 
+          case Some(cacheItemNow) if (cacheItem.itemExpiration === cacheItemNow.itemExpiration) =>
+            (None, createEmptyIfUnset(k))
+          case otherwise => 
+            (otherwise, emptyFV)
+        }.flatten
+      case Some(Right(_)) | None => 
+        emptyFV
+    }
+
+  private def insertAtomic(k: K): F[Unit] = {
     mapRef(k).modify{
       case None => 
-        (None, createEmptyIfUnset)
+        (None, createEmptyIfUnset(k))
       case s@Some(cacheItem) => 
-        val updateIfFailedThenCreate: F[Option[TryableDeferred[F, Either[Throwable, V]]]] = 
-          cacheItem.item.tryGet.flatMap{
-            case Some(Left(_)) => 
-              mapRef(k).modify{ 
-                case Some(cacheItemNow) if (cacheItem.itemExpiration === cacheItemNow.itemExpiration) =>
-                  (None, createEmptyIfUnset)
-                case otherwise => 
-                  (otherwise, emptyFV)
-              }.flatten
-            case Some(Right(_)) | None => 
-              emptyFV
-          }
-        (s, updateIfFailedThenCreate)
+        (s, updateIfFailedThenCreate(k, cacheItem))
     }.flatMap{ maybeDeferred => 
         maybeDeferred.bracketCase(_.traverse_{ deferred => 
-          createItem(k).attempt.flatMap(e => deferred.complete(e))
+          createItem(k).attempt.flatMap(e => deferred.complete(e).attempt.void)
         }){
-          case (Some(deferred), ExitCase.Canceled) => deferred.complete(CancelationDuringAtomicSetCacheInsertProcessing.asLeft)
+          case (Some(deferred), ExitCase.Canceled) => deferred.complete(CancelationDuringAtomicSetCacheInsertProcessing.asLeft).attempt.void
           case (Some(deferred), ExitCase.Error(e)) => deferred.complete(e.asLeft).attempt.void
           case _ => F.unit
         }
     }
   }
 
-  def lookup(k: K): F[Option[V]] = lookupOrGet(k).map(_.some)
+  /**
+   * Overrides any background insert
+   **/
+  def insert(k: K, v: V): F[Unit] = for {
+    defered <- Deferred.tryable[F, Either[Throwable, V]]
+    setAs = v.asRight
+    _ <- defered.complete(setAs)
+    now <- C.monotonic(NANOSECONDS)
+    item = AtomicSetCacheItem(defered, defaultExpiration.map(spec => TimeSpec.unsafeFromNanos(now + spec.nanos))).some
+    action <- mapRef(k).modify{
+      case None => 
+        (item, F.unit)
+      case Some(it) => 
+        (item, it.item.complete(setAs).attempt.void)
+    }
+    out <- action
+  } yield out
+
+
+  /**
+   * Overrides any background insert
+   **/
+  def insertWithTimeout(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit] = for {
+    defered <- Deferred.tryable[F, Either[Throwable, V]]
+    setAs = v.asRight
+    _ <- defered.complete(setAs)
+    now <- C.monotonic(NANOSECONDS)
+    item = AtomicSetCacheItem(defered, optionTimeout.map(spec => TimeSpec.unsafeFromNanos(now + spec.nanos))).some
+    action <- mapRef(k).modify{
+      case None => 
+        (item, F.unit)
+      case Some(it) => 
+        (item, it.item.complete(setAs).attempt.void)
+    }
+    out <- action
+  } yield out
+
+  def lookup(k: K): F[Option[V]] = get(k).map(_.some)
+
+  def delete(k: K): F[Unit] = mapRef(k).set(None)
 
   /**
    * Lookup an item with the given key, and delete it if it is expired.
@@ -88,7 +128,7 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
    * 
    * The function will eagerly delete the item from the cache if it is expired.
    **/
-  def lookupOrGet(k: K): F[V] = {
+  def get(k: K): F[V] = {
     C.monotonic(NANOSECONDS)
       .flatMap{now =>
         mapRef(k).modify[Option[AtomicSetCacheItem[F, V]]]{
@@ -104,10 +144,10 @@ final class AtomicSetCache[F[_], K, V] private[AtomicSetCache] (
       }
       .flatMap{ 
         case Some(s) => s.item.get.flatMap{
-          case Left(_) => insertAtomic(k, defaultExpiration) >> lookupOrGet(k)
+          case Left(_) => insertAtomic(k) >> get(k)
           case Right(v) => F.pure(v)
         }
-        case None => insertAtomic(k, defaultExpiration) >> lookupOrGet(k)
+        case None => insertAtomic(k) >> get(k)
       }
   }
 
