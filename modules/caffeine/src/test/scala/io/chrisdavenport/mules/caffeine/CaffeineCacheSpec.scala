@@ -41,5 +41,7 @@ class CaffeineCacheSpec extends Specification with CatsIO {
       } yield value
       setup.map(_ must_=== None)
     }
+
+
   }
 }

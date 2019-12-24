@@ -17,9 +17,8 @@ private class CaffeineCache[F[_], K, V](cc: CCache[K, V])(implicit sync: Sync[F]
   
   // Members declared in io.chrisdavenport.mules.Lookup
   def lookup(k: K): F[Option[V]] = 
-    sync.delay{
-      Option(cc.getIfPresent(k))
-    }
+    sync.delay(Option(cc.getIfPresent(k)))
+
 }
 
 
@@ -37,12 +36,14 @@ object CaffeineCache {
       .map(b => defaultTimeout.fold(b)(ts => b.expireAfterWrite(ts.nanos, TimeUnit.NANOSECONDS)))
       .map(b => accessTimeout.fold(b)(ts => b.expireAfterAccess(ts.nanos, TimeUnit.NANOSECONDS)))
       .map(b => maxSize.fold(b)(b.maximumSize))
-      .map(_.build[K, V]())
-      .map(fromCache(_))
+      .map(_.build[K with Object, V with Object]())
+      .map(_.asInstanceOf[CCache[K, V]]) // 2.12 hack
+      .map(fromCache[F, K, V](_))
   }
 
   /** Build a Cache from a Caffeine Cache **/
   def fromCache[F[_]: Sync, K, V](cache: CCache[K, V]): Cache[F, K, V] =
     new CaffeineCache[F, K, V](cache)
+
 
 }
