@@ -13,6 +13,12 @@ final class TimeSpec private (
 }
 object TimeSpec {
 
+  implicit val instances = new Order[TimeSpec] with Show[TimeSpec]{
+    override def compare(x: TimeSpec, y: TimeSpec): Int = 
+      Order[Long].compare(x.nanos, y.nanos)
+    override def show(t: TimeSpec): String = show"TimeSpec(${t.nanos})"
+  }
+
   def fromDuration(duration: FiniteDuration): Option[TimeSpec] =
     Alternative[Option].guard(duration > 0.nanos).as(unsafeFromDuration(duration))
 
