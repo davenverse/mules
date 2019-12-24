@@ -14,9 +14,8 @@ import java.util.concurrent.ConcurrentHashMap
 final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
   private val mapRef: MapRef[F, K, Option[DispatchOneCache.DispatchOneCacheItem[F, V]]],
   private val purgeExpiredEntriesOpt : Option[Long => F[List[K]]], // Optional Performance Improvement over Default
-  val defaultExpiration: Option[TimeSpec],
-  private val createItem: K => F[V]
-)(implicit val F: Concurrent[F], val C: Clock[F]) extends GetCache[F, K, V] {
+  val defaultExpiration: Option[TimeSpec]
+)(implicit val F: Concurrent[F], val C: Clock[F]) extends Cache[F, K, V]{
   import DispatchOneCache.DispatchOneCacheItem
   import DispatchOneCache.CancelationDuringDispatchOneCacheInsertProcessing
 
@@ -54,7 +53,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
     (k, cacheItem) => cacheItem.item.tryGet.flatMap{
       case Some(Left(_)) => 
         mapRef(k).modify{ 
-          case Some(cacheItemNow) if (cacheItem.itemExpiration === cacheItemNow.itemExpiration) =>
+          case Some(cacheItemNow) if (cacheItem.itemExpiration.map(_.nanos) === cacheItemNow.itemExpiration.map(_.nanos)) =>
             (None, createEmptyIfUnset(k))
           case otherwise => 
             (otherwise, emptyFV)
@@ -63,7 +62,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
         emptyFV
     }
 
-  private def insertAtomic(k: K): F[Unit] = {
+  private def insertAtomic(k: K, action: K => F[V]): F[Unit] = {
     mapRef(k).modify{
       case None => 
         (None, createEmptyIfUnset(k))
@@ -71,13 +70,64 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
         (s, updateIfFailedThenCreate(k, cacheItem))
     }.flatMap{ maybeDeferred => 
         maybeDeferred.bracketCase(_.traverse_{ deferred => 
-          createItem(k).attempt.flatMap(e => deferred.complete(e).attempt.void)
+          action(k).attempt.flatMap(e => deferred.complete(e).attempt.void)
         }){
           case (Some(deferred), ExitCase.Canceled) => deferred.complete(CancelationDuringDispatchOneCacheInsertProcessing.asLeft).attempt.void
           case (Some(deferred), ExitCase.Error(e)) => deferred.complete(e.asLeft).attempt.void
           case _ => F.unit
         }
     }
+  }
+
+  /**
+   * Gives an atomic only once loading function, or
+   * gets the value in the system
+   **/
+  def lookupOrLoad(k: K, action: K => F[V]): F[V] = {
+    C.monotonic(NANOSECONDS)
+      .flatMap{now =>
+        mapRef(k).modify[Option[DispatchOneCacheItem[F, V]]]{
+          case s@Some(value) => 
+            if (DispatchOneCache.isExpired(now, value)){
+              (None, None)
+            } else {
+              (s, s)
+            }
+          case None => 
+            (None, None)
+        }
+      }
+      .flatMap{ 
+        case Some(s) => s.item.get.flatMap{
+          case Left(_) => insertAtomic(k, action) >> lookupOrLoad(k, action)
+          case Right(v) => F.pure(v)
+        }
+        case None => insertAtomic(k, action) >> lookupOrLoad(k, action)
+      } 
+  }
+
+  def insertWith(k: K, action: K => F[V]): F[Unit] = {
+    for {
+      defer <- Deferred.tryable[F, Either[Throwable, V]]
+      now <- Clock[F].monotonic(NANOSECONDS)
+      item = DispatchOneCacheItem(defer, defaultExpiration.map(spec => TimeSpec.unsafeFromNanos(now + spec.nanos))).some
+      out <- mapRef(k).getAndSet(item)
+        .bracketCase{oldDeferOpt => 
+          action(k).flatMap[Unit]{ a =>
+            val set = a.asRight
+            oldDeferOpt.traverse_(oldDefer => oldDefer.item.complete(set)).attempt >> 
+            defer.complete(set)
+          }
+        }{
+        case (_, ExitCase.Completed) => F.unit
+        case (oldItem, ExitCase.Canceled) => 
+          val set = CancelationDuringDispatchOneCacheInsertProcessing.asLeft
+          oldItem.traverse_(_.item.complete(set)).attempt >> defer.complete(set).attempt.void
+        case (oldItem, ExitCase.Error(e)) => 
+          val set = e.asLeft
+          oldItem.traverse_(_.item.complete(set)).attempt >> defer.complete(set).attempt.void
+      }
+    } yield out
   }
 
   /**
@@ -106,7 +156,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
     defered <- Deferred.tryable[F, Either[Throwable, V]]
     setAs = v.asRight
     _ <- defered.complete(setAs)
-    now <- C.monotonic(NANOSECONDS)
+    now <- C.monotonic(NANOSECONDS) 
     item = DispatchOneCacheItem(defered, optionTimeout.map(spec => TimeSpec.unsafeFromNanos(now + spec.nanos))).some
     action <- mapRef(k).modify{
       case None => 
@@ -117,18 +167,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
     out <- action
   } yield out
 
-  def lookup(k: K): F[Option[V]] = get(k).map(_.some)
-
-  def delete(k: K): F[Unit] = mapRef(k).set(None)
-
-  /**
-   * Lookup an item with the given key, and delete it if it is expired.
-   * 
-   * The function will only return a value if it is present in the cache and if the item is not expired.
-   * 
-   * The function will eagerly delete the item from the cache if it is expired.
-   **/
-  def get(k: K): F[V] = {
+  def lookup(k: K): F[Option[V]] = {
     C.monotonic(NANOSECONDS)
       .flatMap{now =>
         mapRef(k).modify[Option[DispatchOneCacheItem[F, V]]]{
@@ -142,14 +181,16 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
             (None, None)
         }
       }
-      .flatMap{ 
-        case Some(s) => s.item.get.flatMap{
-          case Left(_) => insertAtomic(k) >> get(k)
-          case Right(v) => F.pure(v)
+      .flatMap{
+        case Some(s) => s.item.get.map{
+          case Left(_) => None
+          case Right(v) => v.some
         }
-        case None => insertAtomic(k) >> get(k)
-      } 
-  }
+        case None => F.pure(None)
+      }
+  } 
+
+  def delete(k: K): F[Unit] = mapRef(k).set(None)
 
   /**
    * Change the default expiration value of newly added cache items. Shares an underlying reference
@@ -160,7 +201,6 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
       mapRef,
       purgeExpiredEntriesOpt,
       defaultExpiration,
-      createItem
     )
 
   /**
@@ -209,19 +249,16 @@ object DispatchOneCache {
     * If the specified default expiration value is None, items inserted by insert will never expire.
     **/
   def ofSingleImmutableMap[F[_]: Concurrent: Clock, K, V](
-    createAction: K => F[V],
     defaultExpiration: Option[TimeSpec]
   ): F[DispatchOneCache[F, K, V]] = 
     Ref.of[F, Map[K, DispatchOneCacheItem[F, V]]](Map.empty[K, DispatchOneCacheItem[F, V]])
       .map(ref => new DispatchOneCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
         {l: Long => SingleRef.purgeExpiredEntries(ref)(l)}.some,
-        defaultExpiration,
-        createAction
+        defaultExpiration
       ))
 
   def ofShardedImmutableMap[F[_]: Concurrent : Clock, K, V](
-    createAction: K => F[V],
     shardCount: Int,
     defaultExpiration: Option[TimeSpec]
   ): F[DispatchOneCache[F, K, V]] = 
@@ -230,12 +267,10 @@ object DispatchOneCache {
         _,
         None,
         defaultExpiration,
-        createAction
       )
     }
 
   def ofConcurrentHashMap[F[_]: Concurrent: Clock, K, V](
-    createAction: K => F[V],
     defaultExpiration: Option[TimeSpec],
     initialCapacity: Int = 16,
     loadFactor: Float = 0.75f,
@@ -245,21 +280,18 @@ object DispatchOneCache {
     new DispatchOneCache[F, K, V](
       MapRef.fromConcurrentHashMap(chm),
       None,
-      defaultExpiration,
-      createAction
+      defaultExpiration
     )
   }
 
   def ofMapRef[F[_]: Concurrent: Clock, K, V](
-    createAction: K => F[V],
     mr: MapRef[F, K, Option[DispatchOneCacheItem[F, V]]],
     defaultExpiration: Option[TimeSpec]
   ): DispatchOneCache[F, K, V] = {
     new DispatchOneCache[F, K, V](
         mr,
         None,
-        defaultExpiration,
-        createAction
+        defaultExpiration
       )
   }
 
