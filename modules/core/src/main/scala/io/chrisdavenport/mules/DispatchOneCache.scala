@@ -193,36 +193,6 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
   def delete(k: K): F[Unit] = mapRef(k).set(None)
 
   /**
-   * Lookup an item with the given key, and delete it if it is expired.
-   * 
-   * The function will only return a value if it is present in the cache and if the item is not expired.
-   * 
-   * The function will eagerly delete the item from the cache if it is expired.
-   **/
-  // def get(k: K): F[V] = {
-  //   C.monotonic(NANOSECONDS)
-  //     .flatMap{now =>
-  //       mapRef(k).modify[Option[DispatchOneCacheItem[F, V]]]{
-  //         case s@Some(value) => 
-  //           if (DispatchOneCache.isExpired(now, value)){
-  //             (None, None)
-  //           } else {
-  //             (s, s)
-  //           }
-  //         case None => 
-  //           (None, None)
-  //       }
-  //     }
-  //     .flatMap{ 
-  //       case Some(s) => s.item.get.flatMap{
-  //         case Left(_) => insertAtomic(k) >> get(k)
-  //         case Right(v) => F.pure(v)
-  //       }
-  //       case None => insertAtomic(k) >> get(k)
-  //     } 
-  // }
-
-  /**
    * Change the default expiration value of newly added cache items. Shares an underlying reference
    * with the other cache. Use copyDispatchOneCache if you want different caches.
    **/
