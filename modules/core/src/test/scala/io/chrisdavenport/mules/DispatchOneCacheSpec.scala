@@ -14,10 +14,11 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
     "only run once" in {
       for {
         ref <- Ref[IO].of(0)
-        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](_ => Timer[IO].sleep(1.second) >> ref.modify(i => (i+1, i)), None)
-        first <- cache.get(()).start
-        second <- cache.get(()).start
-        third <- cache.get(()).start
+        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
+        action = {_: Unit => Timer[IO].sleep(1.second) >> ref.modify(i => (i+1, i))}
+        first <- cache.lookupOrLoad((), action).start
+        second <- cache.lookupOrLoad((), action).start
+        third <- cache.lookupOrLoad((), action).start
         _ <- first.join
         _ <- second.join
         _ <- third.join
@@ -29,10 +30,10 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
       for {
         ref <- Ref[IO].of(0)
         errorFunction = ref.modify(i => (i+1, if (i > 3) i.pure[IO] else  Timer[IO].sleep(1.second) >> IO.raiseError(new Throwable("whoopsie")))).flatten
-        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](_ => errorFunction, None)
-        first <- cache.get(()).start
-        second <- cache.get(()).start
-        third <- cache.get(()).start
+        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
+        first <- cache.lookupOrLoad((), { _ => errorFunction}).start
+        second <- cache.lookupOrLoad((), { _ => errorFunction}).start
+        third <- cache.lookupOrLoad((), { _ => errorFunction}).start
         _ <- first.join
         _ <- second.join
         _ <- third.join
@@ -42,18 +43,20 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
 
     "insert places a value" in {
       for {
-        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](_ => IO.pure(5), None)
+        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
+        action = {_: Unit => IO.pure(5)}
         _ <- cache.insert((), 1)
-        now <- cache.get(())
+        now <- cache.lookupOrLoad((), action)
       } yield {
         now must_=== 1
       }
     }
 
-    "insert overrides background action for first action get" in {
+    "insert overrides background action for first action" in {
       for {
-        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](_ => Timer[IO].sleep(5.seconds).as(5), None)
-        first <- cache.get(()).start
+        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
+        action = {_: Unit => Timer[IO].sleep(5.seconds).as(5)}
+        first <- cache.lookupOrLoad((), action).start
         _ <- cache.insert((), 1)
         value <- first.join
       } yield {
@@ -61,11 +64,12 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
       }
     }
 
-    "insert overrides background action for secondary action get" in {
+    "insert overrides background action for secondary action" in {
       for {
-        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](_ => Timer[IO].sleep(5.seconds).as(5), None)
-        first <- cache.get(()).start
-        second <- cache.get(()).start
+        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
+        action = {_: Unit => Timer[IO].sleep(5.seconds).as(5)}
+        first <- cache.lookupOrLoad((),action).start
+        second <- cache.lookupOrLoad((), action).start
         _ <- cache.insert((), 1)
         resultSecond <- second.join
         _ <- first.cancel.timeout(1.second).attempt.void
@@ -77,10 +81,11 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
 
     "insert overrides set value" in {
       for {
-        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](_ => IO.pure(2), None)
-        first <- cache.get(())
+        cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
+        action = {_: Unit => IO.pure(2)}
+        first <- cache.lookupOrLoad((), action)
         _ <- cache.insert((), 1)
-        second <- cache.get(())
+        second <- cache.lookupOrLoad((), action)
       } yield {
         (first,second).must_===((2, 1))
         

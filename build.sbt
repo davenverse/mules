@@ -61,7 +61,7 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
-    "io.chrisdavenport"           %% "mapref"                     % "0.1.0",
+    "io.chrisdavenport"           %% "mapref"                     % "0.1.1",
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "com.codecommit"              %% "cats-effect-testing-specs2" % "0.3.0"       % Test,
