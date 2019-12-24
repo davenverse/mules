@@ -1,6 +1,6 @@
 package io.chrisdavenport.mules.noop
 
-import io.chrisdavenport.mules.{Cache, TimeSpec}
+import io.chrisdavenport.mules.Cache
 import cats.Applicative
 
 private class NoOpCache[F[_], K, V](implicit F: Applicative[F]) extends Cache[F, K, V]{
@@ -10,7 +10,6 @@ private class NoOpCache[F[_], K, V](implicit F: Applicative[F]) extends Cache[F,
   
   // Members declared in io.chrisdavenport.mules.Insert
   def insert(k: K, v: V): F[Unit] = F.unit
-  def insertWithTimeout(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit] = F.unit
   
   // Members declared in io.chrisdavenport.mules.Lookup
   def lookup(k: K): F[Option[V]] = noneF

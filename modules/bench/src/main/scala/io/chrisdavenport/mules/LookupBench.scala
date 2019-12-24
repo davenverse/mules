@@ -1,14 +1,15 @@
 package io.chrisdavenport.mules
 
-import java.util.concurrent.TimeUnit
+// import java.util.concurrent.TimeUnit
 import org.openjdk.jmh.annotations._
 
 import cats.implicits._
 import cats.effect._
+import io.chrisdavenport.mules.caffeine.CaffeineCache
 
 
-@BenchmarkMode(Array(Mode.AverageTime))
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@BenchmarkMode(Array(Mode.Throughput))
+// @OutputTimeUnit(TimeUnit.MILLISECONDS)
 class LookUpBench {
   import LookUpBench._
 
@@ -20,7 +21,11 @@ class LookUpBench {
   def contentionConcurrentHashMap(in: BenchStateCHM) =
     testUnderContention(in.memoryCache, in.readList, in.writeList)(in.CS)
 
-  def testUnderContention(m: MemoryCache[IO, Int, String], r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  @Benchmark
+  def contentionCaffeine(in: BenchStateCaffeine) =
+    testUnderContention(in.cache, in.readList, in.writeList)(in.CS)
+
+  def testUnderContention(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
     val set = w.traverse( m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     val action = (set, read).parMapN((_, _) => ())
@@ -35,7 +40,11 @@ class LookUpBench {
   def contentionReadsConcurrentHashMap(in: BenchStateCHM) = 
     underContentionWaitReads(in.memoryCache, in.readList, in.writeList)(in.CS)
 
-  def underContentionWaitReads(m: MemoryCache[IO, Int, String], r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  @Benchmark
+  def contentionReadsCaffeine(in: BenchStateCaffeine) =
+    underContentionWaitReads(in.cache, in.readList, in.writeList)(in.CS)
+
+  def underContentionWaitReads(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
     val set = w.traverse(m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     Concurrent[IO].bracket(set.start)(
@@ -51,7 +60,11 @@ class LookUpBench {
   def contentionWritesConcurrentHashMap(in: BenchStateCHM) = 
     underContentionWaitWrites(in.memoryCache, in.readList, in.writeList)(in.CS)
 
-  def underContentionWaitWrites(m: MemoryCache[IO, Int, String],r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  @Benchmark
+  def contentionWritesCaffeine(in: BenchStateCaffeine) = 
+    underContentionWaitWrites(in.cache, in.readList, in.writeList)(in.CS)
+
+  def underContentionWaitWrites(m: Cache[IO, Int, String],r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
     val set = w.traverse( m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     Concurrent[IO].bracket(read.start)(
@@ -90,5 +103,20 @@ object LookUpBench {
       memoryCache.insert(1, "yellow").unsafeRunSync()
     }
 
+  }
+
+  @State(Scope.Benchmark)
+  class BenchStateCaffeine {
+    var cache: Cache[IO, Int, String] = _
+    val writeList: List[Int] = (1 to 100).toList
+    val readList : List[Int] = (1 to 100).toList
+    implicit val T = IO.timer(scala.concurrent.ExecutionContext.global)
+    implicit val CS = IO.contextShift(scala.concurrent.ExecutionContext.global)
+
+    @Setup(Level.Trial)
+    def setup(): Unit = {
+      cache = CaffeineCache.build[IO, Int, String](None, None, None).unsafeRunSync()
+      cache.insert(1, "yellow").unsafeRunSync()
+    }
   }
 }

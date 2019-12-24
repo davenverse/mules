@@ -16,7 +16,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
   private val purgeExpiredEntriesOpt : Option[Long => F[List[K]]], // Optional Performance Improvement over Default
   val defaultExpiration: Option[TimeSpec],
   private val createItem: K => F[V]
-)(implicit val F: Concurrent[F], val C: Clock[F]) extends GetCache[F, K, V] {
+)(implicit val F: Concurrent[F], val C: Clock[F]) extends Cache[F, K, V] with Get[F, K, V] {
   import DispatchOneCache.DispatchOneCacheItem
   import DispatchOneCache.CancelationDuringDispatchOneCacheInsertProcessing
 
