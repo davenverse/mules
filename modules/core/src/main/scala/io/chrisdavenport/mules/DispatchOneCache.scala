@@ -181,7 +181,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
             (None, None)
         }
       }
-      .flatMap{ 
+      .flatMap{
         case Some(s) => s.item.get.map{
           case Left(_) => None
           case Right(v) => v.some
@@ -231,7 +231,6 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
       mapRef,
       purgeExpiredEntriesOpt,
       defaultExpiration,
-      // createItem
     )
 
   /**
