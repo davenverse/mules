@@ -10,7 +10,6 @@ trait Get[F[_], K, V]{
 
 trait Insert[F[_], K, V]{
   def insert(k: K, v: V): F[Unit]
-  def insertWithTimeout(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit]
 }
 
 trait Delete[F[_], K]{
@@ -21,5 +20,3 @@ trait Cache[F[_], K, V]
   extends Lookup[F, K, V]
   with Insert[F, K, V]
   with Delete[F, K]
-
-trait GetCache[F[_], K, V] extends Get[F, K, V] with Cache[F, K, V]

@@ -2,19 +2,29 @@ lazy val mules = project.in(file("."))
   .disablePlugins(MimaPlugin)
   .settings(skip in publish := true)
   .settings(commonSettings)
-  .aggregate(core, reload, noop)
+  .aggregate(core, caffeine, reload, noop, bench)
 
 lazy val bench = project.in(file("modules/bench"))
   .disablePlugins(MimaPlugin)
   .enablePlugins(JmhPlugin)
   .settings(skip in publish := true)
   .settings(commonSettings)
-  .dependsOn(core)
+  .dependsOn(core, caffeine)
 
 lazy val core = project.in(file("modules/core"))
   .settings(commonSettings)
   .settings(
     name := "mules"
+  )
+
+lazy val caffeine = project.in(file("modules/caffeine"))
+  .settings(commonSettings)
+  .dependsOn(core)
+  .settings(
+    name := "mules-caffeine",
+    libraryDependencies ++= Seq(
+      "com.github.ben-manes.caffeine" % "caffeine" % "2.8.0"
+    )
   )
 
 lazy val noop = project.in(file("modules/noop"))
