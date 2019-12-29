@@ -1,4 +1,4 @@
-addSbtPlugin("com.geirsson" % "sbt-ci-release" % "1.4.31")
+addSbtPlugin("com.geirsson" % "sbt-ci-release" % "1.5.0")
 addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.1.10")
 addSbtPlugin("com.typesafe" % "sbt-mima-plugin" % "0.6.1")
 addSbtPlugin("org.scalameta" % "sbt-mdoc" % "2.0.3")
