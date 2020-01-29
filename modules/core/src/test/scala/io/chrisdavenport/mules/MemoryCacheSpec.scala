@@ -7,7 +7,7 @@ import cats.effect.concurrent._
 // import cats.effect.implicits._
 import cats.effect.IO
 import cats.effect.laws.util.TestContext
-import cats.effect.specs2.CatsIO
+import cats.effect.testing.specs2.CatsIO
 
 class MemoryCacheSpec extends Specification with CatsIO {
 

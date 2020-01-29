@@ -7,7 +7,7 @@ import cats.effect._
 import cats.effect.concurrent._
 // import cats.effect.implicits._
 import cats.effect.IO
-import cats.effect.specs2.CatsIO
+import cats.effect.testing.specs2.CatsIO
 
 class DispatchOneCacheSpec extends Specification with CatsIO {
   "DispatchOneCache" should {
