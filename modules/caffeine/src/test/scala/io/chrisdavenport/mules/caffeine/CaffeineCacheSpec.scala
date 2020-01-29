@@ -5,7 +5,7 @@ import scala.concurrent.duration._
 import cats.effect._
 // import cats.effect.implicits._
 import cats.effect.IO
-import cats.effect.specs2.CatsIO
+import cats.effect.testing.specs2.CatsIO
 import io.chrisdavenport.mules.TimeSpec
 
 class CaffeineCacheSpec extends Specification with CatsIO {
