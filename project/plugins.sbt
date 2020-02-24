@@ -1,5 +1,5 @@
 addSbtPlugin("com.geirsson" % "sbt-ci-release" % "1.5.2")
-addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.1.10")
+addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.1.11")
 addSbtPlugin("com.typesafe" % "sbt-mima-plugin" % "0.6.4")
 addSbtPlugin("org.scalameta" % "sbt-mdoc" % "2.1.1")
 addSbtPlugin("com.47deg" % "sbt-microsites" % "1.1.2")
