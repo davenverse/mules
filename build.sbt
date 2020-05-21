@@ -23,7 +23,7 @@ lazy val caffeine = project.in(file("modules/caffeine"))
   .settings(
     name := "mules-caffeine",
     libraryDependencies ++= Seq(
-      "com.github.ben-manes.caffeine" % "caffeine" % "2.8.3"
+      "com.github.ben-manes.caffeine" % "caffeine" % "2.8.4"
     )
   )
 
