@@ -72,7 +72,7 @@ object SemispaceCache {
    * Thus, older keys not recently looked up are forgotten
    * 
    */
-  def in[F[_]: Sync, G[_]: Sync, K, V](maxSize: Int): G[Cache[F, K, V]] = maxSize match {
+  def in[G[_]: Sync, F[_]: Sync, K, V](maxSize: Int): G[Cache[F, K, V]] = maxSize match {
     case lessThan0 if (lessThan0 <= 0) => NullCache.impl[F, K, V].pure[G]
     case ms => for {
       gen0 <- Ref.in[G, F, Map[K, V]](Map.empty[K, V])
