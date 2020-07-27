@@ -45,11 +45,11 @@ lazy val reload = project.in(file("modules/reload"))
   )
 
 val catsV = "2.1.1"
-val catsEffectV = "2.1.3"
+val catsEffectV = "2.1.4"
 val catsCollectionV = "0.9.0"
 
-val specs2V = "4.10.0"
-val disciplineSpecs2V = "1.1.0"
+val specs2V = "4.10.1"
+val disciplineSpecs2V = "1.0.0"
 
 lazy val commonSettings = Seq(
   scalaVersion := "2.13.1",
@@ -64,7 +64,7 @@ lazy val commonSettings = Seq(
     "io.chrisdavenport"           %% "mapref"                     % "0.1.1",
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
-    "com.codecommit"              %% "cats-effect-testing-specs2" % "0.4.0"       % Test,
+    "com.codecommit"              %% "cats-effect-testing-specs2" % "0.4.1"       % Test,
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
     "org.typelevel"               %% "discipline-specs2"          % disciplineSpecs2V % Test,
