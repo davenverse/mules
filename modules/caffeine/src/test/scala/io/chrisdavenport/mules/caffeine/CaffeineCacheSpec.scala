@@ -12,7 +12,7 @@ class CaffeineCacheSpec extends Specification with CatsIO {
   "CaffeineCache" should {
     "get a value in a quicker period than the timeout" in {
       val setup = for {
-        cache <- CaffeineCache.build[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)), None, None)
+        cache <- CaffeineCacheBuilder.empty[String, Int].withWriteTimeout(TimeSpec.unsafeFromDuration(1.second)).buildCache[IO]
         _ <- cache.insert("Foo", 1)
         _ <- Timer[IO].sleep(1.milli)
         value <- cache.lookup("Foo")
@@ -23,7 +23,7 @@ class CaffeineCacheSpec extends Specification with CatsIO {
 
     "remove a value after delete" in {
       val setup = for {
-        cache <- CaffeineCache.build[IO, String, Int](None, None, None)
+        cache <- CaffeineCacheBuilder.empty[String, Int].buildCache[IO]
         _ <- cache.insert("Foo", 1)
         _ <- cache.delete("Foo")
         value <- cache.lookup("Foo")
@@ -34,14 +34,12 @@ class CaffeineCacheSpec extends Specification with CatsIO {
 
     "Lookup after interval fails to get a value" in {
       val setup = for {
-        cache <- CaffeineCache.build[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)), None, None)
+        cache <- CaffeineCacheBuilder.empty[String, Int].withWriteTimeout(TimeSpec.unsafeFromDuration(1.second)).buildCache[IO]
         _ <- cache.insert("Foo", 1)
         _ <- Timer[IO].sleep(2.second)
         value <- cache.lookup("Foo")
       } yield value
       setup.map(_ must_=== None)
     }
-
-
   }
 }

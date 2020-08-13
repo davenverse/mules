@@ -5,7 +5,7 @@ import org.openjdk.jmh.annotations._
 
 import cats.implicits._
 import cats.effect._
-import io.chrisdavenport.mules.caffeine.CaffeineCache
+import io.chrisdavenport.mules.caffeine._
 
 
 @BenchmarkMode(Array(Mode.Throughput))
@@ -14,7 +14,7 @@ class LookUpBench {
   import LookUpBench._
 
   @Benchmark
-  def contentionSingleImmutableMap(in: BenchStateRef) = 
+  def contentionSingleImmutableMap(in: BenchStateRef) =
     testUnderContention(in.memoryCache, in.readList, in.writeList)(in.CS)
 
   @Benchmark
@@ -33,11 +33,11 @@ class LookUpBench {
   }
 
   @Benchmark
-  def contentionReadsSingleImmutableMap(in: BenchStateRef) = 
+  def contentionReadsSingleImmutableMap(in: BenchStateRef) =
     underContentionWaitReads(in.memoryCache, in.readList, in.writeList)(in.CS)
 
   @Benchmark
-  def contentionReadsConcurrentHashMap(in: BenchStateCHM) = 
+  def contentionReadsConcurrentHashMap(in: BenchStateCHM) =
     underContentionWaitReads(in.memoryCache, in.readList, in.writeList)(in.CS)
 
   @Benchmark
@@ -53,15 +53,15 @@ class LookUpBench {
   }
 
   @Benchmark
-  def contentionWritesSingleImmutableMap(in: BenchStateRef) = 
+  def contentionWritesSingleImmutableMap(in: BenchStateRef) =
     underContentionWaitWrites(in.memoryCache, in.readList, in.writeList)(in.CS)
 
   @Benchmark
-  def contentionWritesConcurrentHashMap(in: BenchStateCHM) = 
+  def contentionWritesConcurrentHashMap(in: BenchStateCHM) =
     underContentionWaitWrites(in.memoryCache, in.readList, in.writeList)(in.CS)
 
   @Benchmark
-  def contentionWritesCaffeine(in: BenchStateCaffeine) = 
+  def contentionWritesCaffeine(in: BenchStateCaffeine) =
     underContentionWaitWrites(in.cache, in.readList, in.writeList)(in.CS)
 
   def underContentionWaitWrites(m: Cache[IO, Int, String],r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
@@ -115,7 +115,7 @@ object LookUpBench {
 
     @Setup(Level.Trial)
     def setup(): Unit = {
-      cache = CaffeineCache.build[IO, Int, String](None, None, None).unsafeRunSync()
+      cache = CaffeineCacheBuilder.empty[Int, String].buildCache[IO].unsafeRunSync()
       cache.insert(1, "yellow").unsafeRunSync()
     }
   }
