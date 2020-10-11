@@ -38,7 +38,7 @@ private[caffeine] trait LowPriorityByteWeightInstances1 {
   protected final def forFoldable[F[_], A](baseCost: Int, shallowCost: Int => Int)(implicit F: Foldable[F], A: ByteWeight[A]): ByteWeight[F[A]] =
     from{(fa: F[A]) =>
       val (deepCost: Int, size: Int) = fa.foldl((0, 0)){
-        case ((deepCost, size), value) => (size + 1, deepCost + A.weight(value))
+        case ((deepCost, size), value) => (deepCost + A.weight(value), size + 1)
       }
 
       baseCost + shallowCost(size) + deepCost
