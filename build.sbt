@@ -23,7 +23,7 @@ lazy val caffeine = project.in(file("modules/caffeine"))
   .settings(
     name := "mules-caffeine",
     libraryDependencies ++= Seq(
-      "com.github.ben-manes.caffeine" % "caffeine" % "2.8.4"
+      "com.github.ben-manes.caffeine" % "caffeine" % "2.8.6"
     )
   )
 
@@ -48,8 +48,8 @@ val catsV = "2.1.1"
 val catsEffectV = "2.1.4"
 val catsCollectionV = "0.9.0"
 
-val specs2V = "4.10.4"
-val disciplineSpecs2V = "1.1.0"
+val specs2V = "4.10.5"
+val disciplineSpecs2V = "1.0.0"
 
 lazy val commonSettings = Seq(
   scalaVersion := "2.13.1",
