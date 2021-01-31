@@ -13,10 +13,12 @@ import scala.concurrent.duration.{Duration, _}
 
 class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
   private val values: Ref[F, Map[K, AutoFetchingCache.CacheContent[F, V]]],
-  val defaultExpiration: Option[TimeSpec],
+  override final val defaultExpiration: Option[TimeSpec],
   private val refresh: Option[Refresh[F, K]],
   val fetch: K => F[V]
-) extends Lookup[F, K, V] {
+) extends Get[F, K, V]
+    with LifetimeInsert[F, K, V]
+    with Lookup[F, K, V] {
   import AutoFetchingCache._
 
   /**
@@ -38,12 +40,6 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
       _ <- insert(k, v)
     } yield v
 
-  /**
-   * Insert an item in the cache, using the default expiration value of the cache.
-   */
-  private def insert(k: K, v: V): F[Unit] =
-    insertWithTimeout(defaultExpiration)(k, v)
-
   private def insertFetching(k: K)(f: Fiber[F, V]): F[Unit] = {
     values.update(_ + (k -> Fetching[F, V](f)))
   }
@@ -55,7 +51,7 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
    *
    * The expiration value is relative to the current clockMonotonic time, i.e. it will be automatically added to the result of clockMonotonic for the supplied unit.
    **/
-  def insertWithTimeout(
+  override final def insertWithTimeout(
     optionTimeout: Option[TimeSpec]
   )(k: K, v: V): F[Unit] = {
     for {
@@ -83,15 +79,19 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
    * cache is always populated it will always be
    * Some.
    */
-  def lookup(k: K): F[Option[V]] =
-    lookupCurrent(k).map(_.some)
-  
+  override final def lookup(k: K): F[Option[V]] =
+    this.get(k).map(_.some)
+
   /**
    * This method always returns as is expected.
    */
-  def lookupCurrent(k: K): F[V] = 
+  override final def get(k: K): F[V] =
     Timer[F].clock.monotonic(NANOSECONDS)
       .flatMap(now => lookupItemT(k, TimeSpec.unsafeFromNanos(now)))
+
+  @deprecated("Please use get instead", "0.4.1")
+  def lookupCurrent(k: K): F[V] =
+    this.get(k)
 
   private def lookupItemSimple(k: K): F[Option[CacheContent[F, V]]] =
     values.get.map(_.get(k))
@@ -204,11 +204,11 @@ object AutoFetchingCache {
 
   /**
    * Cache Content - What is present in the cache at any
-   * moment. 
-   * 
+   * moment.
+   *
    * Fetching - The fiber of the currently running computation
    * to create get the value for the cache
-   * 
+   *
    * CacheItem - A value in the cache.
    */
   private sealed abstract class CacheContent[F[_], A]
@@ -271,7 +271,7 @@ object AutoFetchingCache {
     val maxParallelRefresh: Option[Int]
   )
   object RefreshConfig {
-    def apply(period: TimeSpec, maxParallelRefresh: Option[Int] = None): RefreshConfig = 
+    def apply(period: TimeSpec, maxParallelRefresh: Option[Int] = None): RefreshConfig =
       new RefreshConfig(period, maxParallelRefresh)
   }
 
