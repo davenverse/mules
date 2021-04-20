@@ -15,7 +15,7 @@ class AutoMemoryCacheSpec extends Specification {
   "Auto MemoryCache.ofSingleImmutableMap" should {
 
     "expire keys" in WithTestContext { ctx => implicit cs => implicit timer =>
-      val spec = Resource.liftF(MemoryCache.ofSingleImmutableMap[IO, Int, String](cacheKeyExpiration.some))
+      val spec = Resource.eval(MemoryCache.ofSingleImmutableMap[IO, Int, String](cacheKeyExpiration.some))
         .flatMap(cache => MemoryCache.liftToAuto(cache, checkExpirationsEvery).as(cache))
         .use(cache =>
           for {
@@ -41,7 +41,7 @@ class AutoMemoryCacheSpec extends Specification {
     }
 
     "resets expiration" in WithTestContext { ctx => implicit cs => implicit timer =>
-      val spec = Resource.liftF(MemoryCache.ofSingleImmutableMap[IO, Int, String](cacheKeyExpiration.some))
+      val spec = Resource.eval(MemoryCache.ofSingleImmutableMap[IO, Int, String](cacheKeyExpiration.some))
         .flatMap(cache => MemoryCache.liftToAuto(cache, checkExpirationsEvery).as(cache))
         .use(cache => 
         for {
@@ -66,7 +66,7 @@ class AutoMemoryCacheSpec extends Specification {
   "Auto MemoryCache.ofConcurrentHashMap" should {
 
     "expire keys" in WithTestContext { ctx => implicit cs => implicit timer =>
-      val spec = Resource.liftF(MemoryCache.ofConcurrentHashMap[IO, Int, String](cacheKeyExpiration.some))
+      val spec = Resource.eval(MemoryCache.ofConcurrentHashMap[IO, Int, String](cacheKeyExpiration.some))
         .flatMap(cache => MemoryCache.liftToAuto(cache, checkExpirationsEvery).as(cache))
         .use(cache =>
           for {
@@ -92,7 +92,7 @@ class AutoMemoryCacheSpec extends Specification {
     }
 
     "resets expiration" in WithTestContext { ctx => implicit cs => implicit timer =>
-      val spec = Resource.liftF(MemoryCache.ofConcurrentHashMap[IO, Int, String](cacheKeyExpiration.some))
+      val spec = Resource.eval(MemoryCache.ofConcurrentHashMap[IO, Int, String](cacheKeyExpiration.some))
         .flatMap(cache => MemoryCache.liftToAuto(cache, checkExpirationsEvery).as(cache))
         .use(cache => 
         for {
