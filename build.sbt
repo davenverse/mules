@@ -48,7 +48,7 @@ val catsV = "2.3.1"
 val catsEffectV = "2.1.4"
 val catsCollectionV = "0.9.1"
 
-val specs2V = "4.10.6"
+val specs2V = "4.11.0"
 val disciplineSpecs2V = "1.0.0"
 
 lazy val commonSettings = Seq(
