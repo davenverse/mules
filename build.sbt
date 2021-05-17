@@ -1,3 +1,36 @@
+val Scala213 = "2.13.5"
+
+ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213)
+ThisBuild / scalaVersion := crossScalaVersions.value.last
+
+ThisBuild / githubWorkflowArtifactUpload := false
+
+ThisBuild / githubWorkflowBuild := Seq(
+  WorkflowStep.Sbt(List("test", "mimaReportBinaryIssues")),
+)
+
+ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
+
+// currently only publishing tags
+ThisBuild / githubWorkflowPublishTargetBranches :=
+  Seq(RefPredicate.StartsWith(Ref.Tag("v")))
+
+ThisBuild / githubWorkflowPublishPreamble +=
+  WorkflowStep.Use(UseRef.Public("olafurpg", "setup-gpg", "v3"))
+
+ThisBuild / githubWorkflowPublish := Seq(
+  WorkflowStep.Sbt(
+    List("ci-release"),
+    name = Some("Publish artifacts to Sonatype"),
+    env = Map(
+      "PGP_PASSPHRASE" -> "${{ secrets.PGP_PASSPHRASE }}",
+      "PGP_SECRET" -> "${{ secrets.PGP_SECRET }}",
+      "SONATYPE_PASSWORD" -> "${{ secrets.SONATYPE_PASSWORD }}",
+      "SONATYPE_USERNAME" -> "${{ secrets.SONATYPE_USERNAME }}"
+    )
+  ),
+)
+
 lazy val mules = project.in(file("."))
   .disablePlugins(MimaPlugin)
   .settings(skip in publish := true)
@@ -23,7 +56,7 @@ lazy val caffeine = project.in(file("modules/caffeine"))
   .settings(
     name := "mules-caffeine",
     libraryDependencies ++= Seq(
-      "com.github.ben-manes.caffeine" % "caffeine" % "2.8.8"
+      "com.github.ben-manes.caffeine" % "caffeine" % "2.9.1"
     )
   )
 
@@ -44,18 +77,18 @@ lazy val reload = project.in(file("modules/reload"))
     )
   )
 
-val catsV = "2.3.1"
-val catsEffectV = "2.1.4"
-val catsCollectionV = "0.9.1"
+val catsV = "2.6.1"
+val catsEffectV = "2.5.1"
+val catsCollectionV = "0.9.2"
 
-val specs2V = "4.10.6"
-val disciplineSpecs2V = "1.0.0"
+val specs2V = "4.11.0"
+val disciplineSpecs2V = "1.1.6"
 
 lazy val commonSettings = Seq(
-  scalaVersion := "2.13.1",
-  crossScalaVersions := Seq(scalaVersion.value, "2.12.10"),
+  scalaVersion := "2.13.5",
+  crossScalaVersions := Seq(scalaVersion.value, "2.12.12"),
 
-  addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.11.3" cross CrossVersion.full),
+  addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 
   libraryDependencies ++= Seq(
@@ -64,7 +97,7 @@ lazy val commonSettings = Seq(
     "io.chrisdavenport"           %% "mapref"                     % "0.1.1",
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
-    "com.codecommit"              %% "cats-effect-testing-specs2" % "0.4.2"       % Test,
+    "com.codecommit"              %% "cats-effect-testing-specs2" % "0.5.3"       % Test,
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
     "org.typelevel"               %% "discipline-specs2"          % disciplineSpecs2V % Test,

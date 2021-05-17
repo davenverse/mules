@@ -26,7 +26,7 @@ class AutoFetchingCacheSpec extends Specification {
         value <- cache.lookupCurrent("Foo")
         cValue <- count.get
       } yield (cValue, value)
-      setup.unsafeRunSync must_=== ((1, 1))
+      setup.unsafeRunSync() must_=== ((1, 1))
     }
 
 
@@ -43,7 +43,7 @@ class AutoFetchingCacheSpec extends Specification {
         cValue <- count.get
 
       } yield (cValue, value)
-      setup.unsafeRunSync must_=== ((2, 1))
+      setup.unsafeRunSync() must_=== ((2, 1))
     }
 
 
@@ -61,7 +61,7 @@ class AutoFetchingCacheSpec extends Specification {
 
       } yield (cValue, value)
 
-      val (cValue, value) = setup.unsafeRunSync
+      val (cValue, value) = setup.unsafeRunSync()
       (value must_=== 1).and(cValue >= 4)
     }
 
@@ -81,7 +81,7 @@ class AutoFetchingCacheSpec extends Specification {
 
       } yield (cValue, value)
 
-      val (cValue, value) = setup.unsafeRunSync
+      val (cValue, value) = setup.unsafeRunSync()
       (value must be >= 4).and(cValue >= 4)
     }
 
