@@ -1,7 +1,6 @@
 package io.chrisdavenport.mules.reload
 
 import cats._
-import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect._
 import cats.implicits._
 import cats.collections.Dequeue
@@ -11,7 +10,7 @@ import io.chrisdavenport.mules.reload.AutoFetchingCache.Refresh
 import scala.collection.immutable.Map
 import scala.concurrent.duration.{Duration, _}
 
-class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
+class AutoFetchingCache[F[_]: Temporal, K, V](
   private val values: Ref[F, Map[K, AutoFetchingCache.CacheContent[F, V]]],
   val defaultExpiration: Option[TimeSpec],
   private val refresh: Option[Refresh[F, K]],
@@ -85,11 +84,11 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
    */
   def lookup(k: K): F[Option[V]] =
     lookupCurrent(k).map(_.some)
-  
+
   /**
    * This method always returns as is expected.
    */
-  def lookupCurrent(k: K): F[V] = 
+  def lookupCurrent(k: K): F[V] =
     Timer[F].clock.monotonic(NANOSECONDS)
       .flatMap(now => lookupItemT(k, TimeSpec.unsafeFromNanos(now)))
 
@@ -204,16 +203,16 @@ object AutoFetchingCache {
 
   /**
    * Cache Content - What is present in the cache at any
-   * moment. 
-   * 
+   * moment.
+   *
    * Fetching - The fiber of the currently running computation
    * to create get the value for the cache
-   * 
+   *
    * CacheItem - A value in the cache.
    */
   private sealed abstract class CacheContent[F[_], A]
 
-  private case class Fetching[F[_], A](f: Fiber[F, A]) extends CacheContent[F, A]
+  private case class Fetching[F[_], A](f: Fiber[F, Throwable, A]) extends CacheContent[F, A]
   private case class CacheItem[F[_], A](
     item: A,
     itemExpiration: Option[TimeSpec]
@@ -271,7 +270,7 @@ object AutoFetchingCache {
     val maxParallelRefresh: Option[Int]
   )
   object RefreshConfig {
-    def apply(period: TimeSpec, maxParallelRefresh: Option[Int] = None): RefreshConfig = 
+    def apply(period: TimeSpec, maxParallelRefresh: Option[Int] = None): RefreshConfig =
       new RefreshConfig(period, maxParallelRefresh)
   }
 
