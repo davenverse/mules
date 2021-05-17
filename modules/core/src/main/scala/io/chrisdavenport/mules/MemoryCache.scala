@@ -27,13 +27,13 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private def noneFA[A]: F[Option[A]] = noneF.widen
 
   private def purgeExpiredEntriesDefault(now: Long): F[List[K]] = {
-    keys.flatMap(l => 
-      l.flatTraverse(k => 
-        mapRef(k).modify(optItem => 
-          optItem.map(item => 
-            if (MemoryCache.isExpired(now, item)) 
+    keys.flatMap(l =>
+      l.flatTraverse(k =>
+        mapRef(k).modify(optItem =>
+          optItem.map(item =>
+            if (MemoryCache.isExpired(now, item))
               (None, List(k))
-            else 
+            else
               (optItem, List.empty)
           ).getOrElse((optItem, List.empty))
         )
@@ -41,7 +41,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
     )
   }
 
-  val purgeExpiredEntries: Long => F[List[K]] = 
+  val purgeExpiredEntries: Long => F[List[K]] =
     purgeExpiredEntriesOpt.getOrElse(purgeExpiredEntriesDefault)
 
   val keys : F[List[K]] = mapRef.keys
@@ -49,7 +49,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Delete an item from the cache. Won't do anything if the item is not present.
    **/
-  def delete(k: K): F[Unit] = 
+  def delete(k: K): F[Unit] =
     mapRef.unsetKey(k) >> onDelete(k)
 
   /**
@@ -62,7 +62,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    * Insert an item in the cache, with an explicit expiration value.
    *
    * If the expiration value is None, the item will never expire. The default expiration value of the cache is ignored.
-   * 
+   *
    * The expiration value is relative to the current clockMonotonic time, i.e. it will be automatically added to the result of clockMonotonic for the supplied unit.
    **/
   def insertWithTimeout(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit] = {
@@ -82,22 +82,22 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
 
   /**
    * Lookup an item with the given key, and delete it if it is expired.
-   * 
+   *
    * The function will only return a value if it is present in the cache and if the item is not expired.
-   * 
+   *
    * The function will eagerly delete the item from the cache if it is expired.
    **/
   def lookup(k: K): F[Option[V]] = {
     C.monotonic(NANOSECONDS)
       .flatMap{now =>
         mapRef(k).modify[F[Option[MemoryCacheItem[V]]]]{
-          case s@Some(value) => 
+          case s@Some(value) =>
             if (MemoryCache.isExpired(now, value)){
               (None, onDelete(k).as(None))
             } else {
               (s, F.pure(s))
             }
-          case None => 
+          case None =>
             (None, noneFA)
         }
       }
@@ -116,11 +116,11 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    *
    * The function will not delete the item from the cache.
    **/
-  def lookupNoUpdate(k: K): F[Option[V]] = 
+  def lookupNoUpdate(k: K): F[Option[V]] =
     C.monotonic(NANOSECONDS)
-      .flatMap{now => 
+      .flatMap{now =>
         mapRef(k).get.map(
-          _.flatMap(ci => 
+          _.flatMap(ci =>
             Alternative[Option].guard(
               !MemoryCache.isExpired(now, ci)
             ).as(ci)
@@ -137,7 +137,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    * Change the default expiration value of newly added cache items. Shares an underlying reference
    * with the other cache. Use copyMemoryCache if you want different caches.
    **/
-  def setDefaultExpiration(defaultExpiration: Option[TimeSpec]): MemoryCache[F, K, V] = 
+  def setDefaultExpiration(defaultExpiration: Option[TimeSpec]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -151,7 +151,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Reference to this MemoryCache with the `onCacheHit` effect being the new function.
    */
-  def setOnCacheHit(onCacheHitNew: (K, V) => F[Unit]): MemoryCache[F, K, V] = 
+  def setOnCacheHit(onCacheHitNew: (K, V) => F[Unit]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -165,7 +165,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Reference to this MemoryCache with the `onCacheMiss` effect being the new function.
    */
-  def setOnCacheMiss(onCacheMissNew: K => F[Unit]): MemoryCache[F, K, V] = 
+  def setOnCacheMiss(onCacheMissNew: K => F[Unit]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -178,7 +178,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Reference to this MemoryCache with the `onDelete` effect being the new function.
    */
-  def setOnDelete(onDeleteNew: K => F[Unit]): MemoryCache[F, K, V] = 
+  def setOnDelete(onDeleteNew: K => F[Unit]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -192,7 +192,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Reference to this MemoryCache with the `onInsert` effect being the new function.
    */
-  def setOnInsert(onInsertNew: (K, V) => F[Unit]): MemoryCache[F, K, V] = 
+  def setOnInsert(onInsertNew: (K, V) => F[Unit]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -207,7 +207,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Return the size of the cache, including expired items.
    **/
-  def size: F[Int] = 
+  def size: F[Int] =
     keys.map(_.size)
 
   /**
@@ -222,11 +222,11 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
       _ <-  out.traverse_(onDelete)
     } yield ()
   }
-  
+
   /**
    * Reference to this MemoryCache with the `onCacheHit` effect being composed of the old and new function.
    */
-  def withOnCacheHit(onCacheHitNew: (K, V) => F[Unit]): MemoryCache[F, K, V] = 
+  def withOnCacheHit(onCacheHitNew: (K, V) => F[Unit]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -240,7 +240,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Reference to this MemoryCache with the `onCacheMiss` effect being composed of the old and new function.
    */
-  def withOnCacheMiss(onCacheMissNew: K => F[Unit]): MemoryCache[F, K, V] = 
+  def withOnCacheMiss(onCacheMissNew: K => F[Unit]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -254,7 +254,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Reference to this MemoryCache with the `onDelete` effect being composed of the old and new function.
    */
-  def withOnDelete(onDeleteNew: K => F[Unit]): MemoryCache[F, K, V] = 
+  def withOnDelete(onDeleteNew: K => F[Unit]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -268,7 +268,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   /**
    * Reference to this MemoryCache with the `onInsert` effect being composed of the old and new function.
    */
-  def withOnInsert(onInsertNew: (K, V) => F[Unit]): MemoryCache[F, K, V] = 
+  def withOnInsert(onInsertNew: (K, V) => F[Unit]): MemoryCache[F, K, V] =
     new MemoryCache[F, K, V](
       mapRef,
       purgeExpiredEntriesOpt,
@@ -310,14 +310,14 @@ object MemoryCache {
 
   /**
     * Create a new cache with a default expiration value for newly added cache items.
-    * 
+    *
     * Items that are added to the cache without an explicit expiration value (using insert) will be inserted with the default expiration value.
-    * 
+    *
     * If the specified default expiration value is None, items inserted by insert will never expire.
     **/
   def ofSingleImmutableMap[F[_]: Sync: Clock, K, V](
     defaultExpiration: Option[TimeSpec]
-  ): F[MemoryCache[F, K, V]] = 
+  ): F[MemoryCache[F, K, V]] =
     Ref.of[F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
       .map(ref => new MemoryCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
@@ -332,7 +332,7 @@ object MemoryCache {
   def ofShardedImmutableMap[F[_]: Sync : Clock, K, V](
     shardCount: Int,
     defaultExpiration: Option[TimeSpec]
-  ): F[MemoryCache[F, K, V]] = 
+  ): F[MemoryCache[F, K, V]] =
     MapRef.ofShardedImmutableMap[F, K, MemoryCacheItem[V]](shardCount).map{
       new MemoryCache[F, K, V](
         _,
@@ -385,21 +385,21 @@ object MemoryCache {
       ref.modify(
         m => {
           val l = scala.collection.mutable.ListBuffer.empty[K]
-          m.foreach{ case (k, item) => 
+          m.foreach{ case (k, item) =>
             if (isExpired(now, item)) {
               l.+=(k)
             }
           }
-          val remove = l.result
+          val remove = l.result()
           val finalMap = m -- remove
           (finalMap, remove)
         }
       )
     }
-  }  
+  }
 
   private def isExpired[A](checkAgainst: Long, cacheItem: MemoryCacheItem[A]): Boolean = {
-    cacheItem.itemExpiration match{ 
+    cacheItem.itemExpiration match{
       case Some(e) if e.nanos < checkAgainst => true
       case _ => false
     }
