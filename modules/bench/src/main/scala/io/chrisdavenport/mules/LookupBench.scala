@@ -25,7 +25,7 @@ class LookUpBench {
   def contentionCaffeine(in: BenchStateCaffeine) =
     testUnderContention(in.cache, in.readList, in.writeList)(in.CS)
 
-  def testUnderContention(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  def testUnderContention(m: Cache[IO, Int, String], r: List[Int], w: List[Int]) = {
     val set = w.traverse( m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     val action = (set, read).parMapN((_, _) => ())
@@ -44,7 +44,7 @@ class LookUpBench {
   def contentionReadsCaffeine(in: BenchStateCaffeine) =
     underContentionWaitReads(in.cache, in.readList, in.writeList)(in.CS)
 
-  def underContentionWaitReads(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  def underContentionWaitReads(m: Cache[IO, Int, String], r: List[Int], w: List[Int]) = {
     val set = w.traverse(m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     Concurrent[IO].bracket(set.start)(
@@ -64,7 +64,7 @@ class LookUpBench {
   def contentionWritesCaffeine(in: BenchStateCaffeine) = 
     underContentionWaitWrites(in.cache, in.readList, in.writeList)(in.CS)
 
-  def underContentionWaitWrites(m: Cache[IO, Int, String],r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  def underContentionWaitWrites(m: Cache[IO, Int, String],r: List[Int], w: List[Int]) = {
     val set = w.traverse( m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     Concurrent[IO].bracket(read.start)(

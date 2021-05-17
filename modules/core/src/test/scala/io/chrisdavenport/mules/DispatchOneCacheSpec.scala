@@ -8,6 +8,7 @@ import cats.effect.concurrent._
 // import cats.effect.implicits._
 import cats.effect.IO
 import cats.effect.testing.specs2.CatsIO
+import cats.effect.{ Ref, Temporal }
 
 class DispatchOneCacheSpec extends Specification with CatsIO {
   "DispatchOneCache" should {
@@ -15,7 +16,7 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
       for {
         ref <- Ref[IO].of(0)
         cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-        action = {_: Unit => Timer[IO].sleep(1.second) >> ref.modify(i => (i+1, i))}
+        action = {_: Unit => Temporal[IO].sleep(1.second) >> ref.modify(i => (i+1, i))}
         first <- cache.lookupOrLoad((), action).start
         second <- cache.lookupOrLoad((), action).start
         third <- cache.lookupOrLoad((), action).start
@@ -29,7 +30,7 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
     "only run till errors cease" in {
       for {
         ref <- Ref[IO].of(0)
-        errorFunction = ref.modify(i => (i+1, if (i > 3) i.pure[IO] else  Timer[IO].sleep(1.second) >> IO.raiseError(new Throwable("whoopsie")))).flatten
+        errorFunction = ref.modify(i => (i+1, if (i > 3) i.pure[IO] else  Temporal[IO].sleep(1.second) >> IO.raiseError(new Throwable("whoopsie")))).flatten
         cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
         first <- cache.lookupOrLoad((), { _ => errorFunction}).start
         second <- cache.lookupOrLoad((), { _ => errorFunction}).start
@@ -55,7 +56,7 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
     "insert overrides background action for first action" in {
       for {
         cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-        action = {_: Unit => Timer[IO].sleep(5.seconds).as(5)}
+        action = {_: Unit => Temporal[IO].sleep(5.seconds).as(5)}
         first <- cache.lookupOrLoad((), action).start
         _ <- cache.insert((), 1)
         value <- first.join
@@ -67,7 +68,7 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
     "insert overrides background action for secondary action" in {
       for {
         cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-        action = {_: Unit => Timer[IO].sleep(5.seconds).as(5)}
+        action = {_: Unit => Temporal[IO].sleep(5.seconds).as(5)}
         first <- cache.lookupOrLoad((),action).start
         second <- cache.lookupOrLoad((), action).start
         _ <- cache.insert((), 1)

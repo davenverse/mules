@@ -1,7 +1,6 @@
 package io.chrisdavenport.mules.reload
 
 import cats._
-import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect._
 import cats.implicits._
 import cats.collections.Dequeue
@@ -10,8 +9,10 @@ import io.chrisdavenport.mules.reload.AutoFetchingCache.Refresh
 
 import scala.collection.immutable.Map
 import scala.concurrent.duration.{Duration, _}
+import cats.effect.{ Ref, Temporal }
+import cats.effect.std.Semaphore
 
-class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
+class AutoFetchingCache[F[_] : Concurrent : Temporal, K, V](
   private val values: Ref[F, Map[K, AutoFetchingCache.CacheContent[F, V]]],
   val defaultExpiration: Option[TimeSpec],
   private val refresh: Option[Refresh[F, K]],
@@ -59,7 +60,7 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
     optionTimeout: Option[TimeSpec]
   )(k: K, v: V): F[Unit] = {
     for {
-      now <- Timer[F].clock.monotonic(NANOSECONDS)
+      now <- Temporal[F].clock.monotonic(NANOSECONDS)
       timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
       _ <- values.update(_ + (k -> CacheItem[F, V](v, timeout)))
     } yield ()
@@ -90,7 +91,7 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
    * This method always returns as is expected.
    */
   def lookupCurrent(k: K): F[V] = 
-    Timer[F].clock.monotonic(NANOSECONDS)
+    Temporal[F].clock.monotonic(NANOSECONDS)
       .flatMap(now => lookupItemT(k, TimeSpec.unsafeFromNanos(now)))
 
   private def lookupItemSimple(k: K): F[Option[CacheContent[F, V]]] =
@@ -113,7 +114,7 @@ class AutoFetchingCache[F[_] : Concurrent : Timer, K, V](
       def loop(): F[Unit] = {
         for {
           fiber <- Concurrent[F].start[V](
-            Timer[F].sleep(Duration.fromNanos(r.period.nanos)) >> fetch(k)
+            Temporal[F].sleep(Duration.fromNanos(r.period.nanos)) >> fetch(k)
           )
           _ <- insertFetching(k)(fiber)
           newValue <- fiber.join
@@ -243,7 +244,7 @@ object AutoFetchingCache {
    *
    * If the specified default expiration value is None, items inserted by insert will never expire.
    **/
-  def createCache[F[_] : Concurrent : Timer, K, V](
+  def createCache[F[_] : Concurrent : Temporal, K, V](
     defaultExpiration: Option[TimeSpec],
     refreshConfig: Option[RefreshConfig]
   )(fetch: K => F[V]): F[AutoFetchingCache[F, K, V]] =

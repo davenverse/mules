@@ -10,6 +10,7 @@ import scala.collection.immutable.Map
 import io.chrisdavenport.mapref.MapRef
 
 import java.util.concurrent.ConcurrentHashMap
+import cats.effect.{ Deferred, Ref, Temporal }
 
 final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
   private val mapRef: MapRef[F, K, Option[DispatchOneCache.DispatchOneCacheItem[F, V]]],
@@ -231,13 +232,13 @@ object DispatchOneCache {
    *
    * @return an `Resource[F, Unit]` that will keep removing expired entries in the background.
    **/
-  def liftToAuto[F[_]: Concurrent: Timer, K, V](
+  def liftToAuto[F[_]: Concurrent: Temporal, K, V](
     DispatchOneCache: DispatchOneCache[F, K, V],
     checkOnExpirationsEvery: TimeSpec
   ): Resource[F, Unit] = {
     def runExpiration(cache: DispatchOneCache[F, K, V]): F[Unit] = {
       val check = TimeSpec.toDuration(checkOnExpirationsEvery)
-      Timer[F].sleep(check) >> cache.purgeExpired >> runExpiration(cache)
+      Temporal[F].sleep(check) >> cache.purgeExpired >> runExpiration(cache)
     }
 
     Resource.make(runExpiration(DispatchOneCache).start)(_.cancel).void

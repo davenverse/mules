@@ -1,13 +1,13 @@
 package io.chrisdavenport.mules.reload
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import io.chrisdavenport.mules._
 import org.specs2.mutable.Specification
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import cats.effect.Ref
 
 class AutoFetchingCacheSpec extends Specification {
 
