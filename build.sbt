@@ -101,7 +101,7 @@ lazy val commonSettings = Seq(
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "org.scalameta"               %% "munit"                      % munitV        % Test,
     "org.scalameta"               %% "munit-scalacheck"           % munitV        % Test,
-    "org.typelevel"               %% "munit-cats-effect-2"        % munitCEV      % Test,
+    "org.typelevel"               %% "munit-cats-effect-3"        % munitCEV      % Test,
   )
 )
 

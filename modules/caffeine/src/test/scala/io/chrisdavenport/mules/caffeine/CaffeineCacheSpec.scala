@@ -10,7 +10,7 @@ class CaffeineCacheSpec extends CatsEffectSuite {
     for {
       cache <- CaffeineCache.build[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)), None, None)
       _ <- cache.insert("Foo", 1)
-      _ <- Timer[IO].sleep(1.milli)
+      _ <- Temporal[IO].sleep(1.milli)
       value <- cache.lookup("Foo")
     } yield {
       assertEquals(value, Some(1))
@@ -34,7 +34,7 @@ class CaffeineCacheSpec extends CatsEffectSuite {
     for {
       cache <- CaffeineCache.build[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)), None, None)
       _ <- cache.insert("Foo", 1)
-      _ <- Timer[IO].sleep(2.second)
+      _ <- Temporal[IO].sleep(2.second)
       value <- cache.lookup("Foo")
     } yield {
       assertEquals(value, None)

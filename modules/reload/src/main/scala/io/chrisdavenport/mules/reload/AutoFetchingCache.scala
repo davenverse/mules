@@ -2,7 +2,8 @@ package io.chrisdavenport.mules.reload
 
 import cats._
 import cats.effect._
-import cats.implicits._
+import cats.effect.std.Semaphore
+import cats.syntax.all._
 import cats.collections.Dequeue
 import io.chrisdavenport.mules._
 import io.chrisdavenport.mules.reload.AutoFetchingCache.Refresh
@@ -43,7 +44,7 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
   private def insert(k: K, v: V): F[Unit] =
     insertWithTimeout(defaultExpiration)(k, v)
 
-  private def insertFetching(k: K)(f: Fiber[F, V]): F[Unit] = {
+  private def insertFetching(k: K)(f: Fiber[F, Throwable, V]): F[Unit] = {
     values.update(_ + (k -> Fetching[F, V](f)))
   }
 
@@ -58,8 +59,8 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
     optionTimeout: Option[TimeSpec]
   )(k: K, v: V): F[Unit] = {
     for {
-      now <- Timer[F].clock.monotonic(NANOSECONDS)
-      timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
+      now <- Clock[F].monotonic
+      timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now.toNanos + ts.nanos))
       _ <- values.update(_ + (k -> CacheItem[F, V](v, timeout)))
     } yield ()
   }
@@ -89,8 +90,8 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
    * This method always returns as is expected.
    */
   def lookupCurrent(k: K): F[V] =
-    Timer[F].clock.monotonic(NANOSECONDS)
-      .flatMap(now => lookupItemT(k, TimeSpec.unsafeFromNanos(now)))
+    Clock[F].monotonic
+      .flatMap(now => lookupItemT(k, TimeSpec.unsafeFromNanos(now.toNanos)))
 
   private def lookupItemSimple(k: K): F[Option[CacheContent[F, V]]] =
     values.get.map(_.get(k))
@@ -111,8 +112,8 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
     refresh.map { r =>
       def loop(): F[Unit] = {
         for {
-          fiber <- Concurrent[F].start[V](
-            Timer[F].sleep(Duration.fromNanos(r.period.nanos)) >> fetch(k)
+          fiber <- Spawn[F].start[V](
+            Temporal[F].sleep(Duration.fromNanos(r.period.nanos)) >> fetch(k)
           )
           _ <- insertFetching(k)(fiber)
           newValue <- fiber.join
@@ -122,7 +123,7 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
 
       r match {
         case BoundedRefresh(_, s, tasks) =>
-          def cancel(m: Map[K, (Int, Fiber[F, Unit])], popped: Option[K]): F[Map[K, (Int, Fiber[F, Unit])]] =
+          def cancel(m: Map[K, (Int, Fiber[F, Throwable, Unit])], popped: Option[K]): F[Map[K, (Int, Fiber[F, Throwable, Unit])]] =
             (for {
               k <- popped
               (cpt, f) <- m.get(k)
@@ -131,7 +132,7 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
               else Applicative[F].pure(m)
             ).getOrElse(Applicative[F].pure(m))
 
-            s.withPermit{
+            s.permit.use { _ =>
               for {
                 (m, queue) <- tasks.get
                 (newq, popped) = queue.push(k)
@@ -146,7 +147,7 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
 
 
           case UnboundedRefresh(_, s, tasks) =>
-            s.withPermit{
+            s.permit.use { _ =>
               for {
                 m <- tasks.get
                 m1 <- m.get(k) match {
@@ -179,7 +180,7 @@ object AutoFetchingCache {
   final private case class BoundedRefresh[F[_] : Monad, K](
     period: TimeSpec,
     s: Semaphore[F],
-    tasks: Ref[F, (Map[K, (Int, Fiber[F, Unit])], BoundedQueue[K])]
+    tasks: Ref[F, (Map[K, (Int, Fiber[F, Throwable, Unit])], BoundedQueue[K])]
   ) extends Refresh[F, K] {
     def cancelAll: F[Unit] =
       tasks.modify { case (m, q) =>
@@ -191,7 +192,7 @@ object AutoFetchingCache {
   final private case class UnboundedRefresh[F[_] : Monad, K](
     period: TimeSpec,
     s: Semaphore[F],
-    tasks: Ref[F, Map[K, Fiber[F, Unit]]]
+    tasks: Ref[F, Map[K, Fiber[F, Throwable, Unit]]]
   ) extends Refresh[F, K] {
     def cancelAll: F[Unit] =
       tasks.modify { m =>
@@ -242,7 +243,7 @@ object AutoFetchingCache {
    *
    * If the specified default expiration value is None, items inserted by insert will never expire.
    **/
-  def createCache[F[_] : Concurrent : Timer, K, V](
+  def createCache[F[_]: Temporal, K, V](
     defaultExpiration: Option[TimeSpec],
     refreshConfig: Option[RefreshConfig]
   )(fetch: K => F[V]): F[AutoFetchingCache[F, K, V]] =
@@ -252,12 +253,12 @@ object AutoFetchingCache {
       refresh <- refreshConfig.traverse[F, Refresh[F, K]] { conf =>
         conf.maxParallelRefresh match {
         case Some(maxParallel) =>
-          Ref.of[F, (Map[K, (Int, Fiber[F, Unit])], BoundedQueue[K])]((Map.empty, BoundedQueue.empty(maxParallel)))
+          Ref.of[F, (Map[K, (Int, Fiber[F, Throwable, Unit])], BoundedQueue[K])]((Map.empty, BoundedQueue.empty(maxParallel)))
             .map(ref =>
               BoundedRefresh(conf.period, s, ref)
             )
         case None =>
-          Ref.of[F, Map[K, Fiber[F, Unit]]](Map.empty)
+          Ref.of[F, Map[K, Fiber[F, Throwable, Unit]]](Map.empty)
             .map(ref =>
               UnboundedRefresh(conf.period, s, ref)
             )

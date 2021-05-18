@@ -5,6 +5,7 @@ import org.openjdk.jmh.annotations._
 
 import cats.implicits._
 import cats.effect._
+import cats.effect.unsafe.IORuntime
 import io.chrisdavenport.mules.caffeine.CaffeineCache
 
 
@@ -14,18 +15,18 @@ class LookUpBench {
   import LookUpBench._
 
   @Benchmark
-  def contentionSingleImmutableMap(in: BenchStateRef) = 
-    testUnderContention(in.memoryCache, in.readList, in.writeList)(in.CS)
+  def contentionSingleImmutableMap(in: BenchStateRef) =
+    testUnderContention(in.memoryCache, in.readList, in.writeList)(in.R)
 
   @Benchmark
   def contentionConcurrentHashMap(in: BenchStateCHM) =
-    testUnderContention(in.memoryCache, in.readList, in.writeList)(in.CS)
+    testUnderContention(in.memoryCache, in.readList, in.writeList)(in.R)
 
   @Benchmark
   def contentionCaffeine(in: BenchStateCaffeine) =
-    testUnderContention(in.cache, in.readList, in.writeList)(in.CS)
+    testUnderContention(in.cache, in.readList, in.writeList)(in.R)
 
-  def testUnderContention(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  def testUnderContention(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit R: IORuntime) = {
     val set = w.traverse( m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     val action = (set, read).parMapN((_, _) => ())
@@ -33,18 +34,18 @@ class LookUpBench {
   }
 
   @Benchmark
-  def contentionReadsSingleImmutableMap(in: BenchStateRef) = 
-    underContentionWaitReads(in.memoryCache, in.readList, in.writeList)(in.CS)
+  def contentionReadsSingleImmutableMap(in: BenchStateRef) =
+    underContentionWaitReads(in.memoryCache, in.readList, in.writeList)(in.R)
 
   @Benchmark
-  def contentionReadsConcurrentHashMap(in: BenchStateCHM) = 
-    underContentionWaitReads(in.memoryCache, in.readList, in.writeList)(in.CS)
+  def contentionReadsConcurrentHashMap(in: BenchStateCHM) =
+    underContentionWaitReads(in.memoryCache, in.readList, in.writeList)(in.R)
 
   @Benchmark
   def contentionReadsCaffeine(in: BenchStateCaffeine) =
-    underContentionWaitReads(in.cache, in.readList, in.writeList)(in.CS)
+    underContentionWaitReads(in.cache, in.readList, in.writeList)(in.R)
 
-  def underContentionWaitReads(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  def underContentionWaitReads(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit R: IORuntime) = {
     val set = w.traverse(m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     Concurrent[IO].bracket(set.start)(
@@ -53,18 +54,18 @@ class LookUpBench {
   }
 
   @Benchmark
-  def contentionWritesSingleImmutableMap(in: BenchStateRef) = 
-    underContentionWaitWrites(in.memoryCache, in.readList, in.writeList)(in.CS)
+  def contentionWritesSingleImmutableMap(in: BenchStateRef) =
+    underContentionWaitWrites(in.memoryCache, in.readList, in.writeList)(in.R)
 
   @Benchmark
-  def contentionWritesConcurrentHashMap(in: BenchStateCHM) = 
-    underContentionWaitWrites(in.memoryCache, in.readList, in.writeList)(in.CS)
+  def contentionWritesConcurrentHashMap(in: BenchStateCHM) =
+    underContentionWaitWrites(in.memoryCache, in.readList, in.writeList)(in.R)
 
   @Benchmark
-  def contentionWritesCaffeine(in: BenchStateCaffeine) = 
-    underContentionWaitWrites(in.cache, in.readList, in.writeList)(in.CS)
+  def contentionWritesCaffeine(in: BenchStateCaffeine) =
+    underContentionWaitWrites(in.cache, in.readList, in.writeList)(in.R)
 
-  def underContentionWaitWrites(m: Cache[IO, Int, String],r: List[Int], w: List[Int])(implicit CS: ContextShift[IO]) = {
+  def underContentionWaitWrites(m: Cache[IO, Int, String],r: List[Int], w: List[Int])(implicit R: IORuntime) = {
     val set = w.traverse( m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     Concurrent[IO].bracket(read.start)(
@@ -80,8 +81,7 @@ object LookUpBench {
     var memoryCache: MemoryCache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val T = IO.timer(scala.concurrent.ExecutionContext.global)
-    implicit val CS = IO.contextShift(scala.concurrent.ExecutionContext.global)
+    implicit val R = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {
@@ -94,8 +94,7 @@ object LookUpBench {
     var memoryCache: MemoryCache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val T = IO.timer(scala.concurrent.ExecutionContext.global)
-    implicit val CS = IO.contextShift(scala.concurrent.ExecutionContext.global)
+    implicit val R = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {
@@ -110,8 +109,7 @@ object LookUpBench {
     var cache: Cache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val T = IO.timer(scala.concurrent.ExecutionContext.global)
-    implicit val CS = IO.contextShift(scala.concurrent.ExecutionContext.global)
+    implicit val R = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {
