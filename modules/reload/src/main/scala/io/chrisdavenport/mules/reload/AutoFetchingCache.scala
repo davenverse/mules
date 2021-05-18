@@ -9,7 +9,7 @@ import io.chrisdavenport.mules._
 import io.chrisdavenport.mules.reload.AutoFetchingCache.Refresh
 
 import scala.collection.immutable.Map
-import scala.concurrent.duration.{Duration, _}
+import scala.concurrent.duration.Duration
 
 class AutoFetchingCache[F[_]: Temporal, K, V](
   private val values: Ref[F, Map[K, AutoFetchingCache.CacheContent[F, V]]],
@@ -26,7 +26,7 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
     refresh.fold(Applicative[F].unit)(_.cancelAll)
 
   private def extractContentT(k: K, t: TimeSpec)(content: CacheContent[F, V]): F[V] = content match {
-    case v0: Fetching[F, V] => v0.f.join
+    case v0: Fetching[F, V] => v0.f.join.flatMap(succeedOrThrow(_))
     case v0: CacheItem[F, V] =>
       if (isExpired(t, v0)) fetchAndInsert(k)
       else Applicative[F].pure(v0.item)
@@ -116,7 +116,8 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
             Temporal[F].sleep(Duration.fromNanos(r.period.nanos)) >> fetch(k)
           )
           _ <- insertFetching(k)(fiber)
-          newValue <- fiber.join
+          outcome <- fiber.join
+          newValue <- succeedOrThrow(outcome)
           out <- insert(k, newValue)
         } yield out
       }.handleErrorWith(_ => loop()) >> loop()
@@ -170,6 +171,16 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
 }
 
 object AutoFetchingCache {
+  final object FetchCancelled extends RuntimeException
+
+  private def succeedOrThrow[F[_]: ApplicativeThrow, A](
+    outcome: Outcome[F, Throwable, A]
+  ): F[A] =
+    outcome match {
+      case Outcome.Succeeded(x) => x
+      case Outcome.Canceled() => FetchCancelled.raiseError[F, A]
+      case Outcome.Errored(e) => e.raiseError[F, A]
+    }
 
   private sealed trait Refresh[F[_], K] {
     def period: TimeSpec

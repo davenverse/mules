@@ -55,7 +55,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
       _ <- cache.insert((), 1)
       value <- first.join
     } yield {
-      assertEquals(value, 1)
+      assertEquals(value, Outcome.Succeeded[IO,Throwable,Int](1.pure[IO]))
     }
   }
 
@@ -69,7 +69,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
       resultSecond <- second.join
       _ <- first.cancel.timeout(1.second).attempt.void
     } yield {
-      assertEquals(resultSecond, 1)
+      assertEquals(resultSecond, Outcome.Succeeded[IO,Throwable,Int](1.pure[IO]))
     }
   }
 
