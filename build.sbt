@@ -83,6 +83,8 @@ val catsCollectionV = "0.9.2"
 
 val specs2V = "4.11.0"
 val disciplineSpecs2V = "1.1.6"
+val munitV = "0.7.25"
+val munitCEV = "1.0.2"
 
 lazy val commonSettings = Seq(
   scalaVersion := "2.13.5",
@@ -91,6 +93,8 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
 
+  testFrameworks += new TestFramework("munit.Framework"),
+
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
@@ -98,6 +102,9 @@ lazy val commonSettings = Seq(
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "com.codecommit"              %% "cats-effect-testing-specs2" % "0.5.3"       % Test,
+    "org.scalameta"               %% "munit"                      % munitV        % Test,
+    "org.scalameta"               %% "munit-scalacheck"           % munitV        % Test,
+    "org.typelevel"               %% "munit-cats-effect-2"        % munitCEV      % Test,
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
     "org.typelevel"               %% "discipline-specs2"          % disciplineSpecs2V % Test,
