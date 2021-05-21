@@ -33,14 +33,14 @@ ThisBuild / githubWorkflowPublish := Seq(
 
 lazy val mules = project.in(file("."))
   .disablePlugins(MimaPlugin)
-  .settings(skip in publish := true)
+  .settings(publish / skip := true)
   .settings(commonSettings)
   .aggregate(core, caffeine, reload, noop, bench)
 
 lazy val bench = project.in(file("modules/bench"))
   .disablePlugins(MimaPlugin)
   .enablePlugins(JmhPlugin)
-  .settings(skip in publish := true)
+  .settings(publish / skip := true)
   .settings(commonSettings)
   .dependsOn(core, caffeine)
 
