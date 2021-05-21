@@ -1,7 +1,8 @@
-val Scala213 = "2.13.5"
+val BuildScala = "2.13.5"
+val ScalaTargets = Seq("2.12.13", BuildScala, "3.0.0")
 
-ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0")
-ThisBuild / scalaVersion := crossScalaVersions.value.last
+ThisBuild / crossScalaVersions := ScalaTargets
+ThisBuild / scalaVersion := BuildScala
 
 ThisBuild / githubWorkflowArtifactUpload := false
 
@@ -85,8 +86,8 @@ val specs2V = "4.11.0"
 val disciplineSpecs2V = "1.1.6"
 
 lazy val commonSettings = Seq(
-  scalaVersion := "2.13.5",
-  crossScalaVersions := Seq(scalaVersion.value, "2.12.12"),
+  scalaVersion := BuildScala, 
+  crossScalaVersions := ScalaTargets,
 
   addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
