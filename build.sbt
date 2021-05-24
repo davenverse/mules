@@ -97,7 +97,7 @@ lazy val commonSettings = Seq(
     "io.chrisdavenport"           %% "mapref"                     % "0.1.1",
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
-    "com.codecommit"              %% "cats-effect-testing-specs2" % "0.5.3"       % Test,
+    "com.codecommit"              %% "cats-effect-testing-specs2" % "0.5.4"       % Test,
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
     "org.typelevel"               %% "discipline-specs2"          % disciplineSpecs2V % Test,
