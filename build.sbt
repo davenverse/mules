@@ -1,4 +1,4 @@
-val BuildScala = "2.13.5"
+val BuildScala = "2.13.6"
 val ScalaTargets = Seq("2.12.13", BuildScala, "3.0.0")
 
 ThisBuild / crossScalaVersions := ScalaTargets
@@ -79,23 +79,31 @@ lazy val reload = project.in(file("modules/reload"))
   )
 
 val catsV = "2.6.1"
-val catsEffectV = "2.5.1"
-val catsCollectionV = "0.9.2"
+val catsEffectV = "3.1.1"
+val catsCollectionV = "0.9.3"
 
 val specs2V = "4.11.0"
 val disciplineSpecs2V = "1.1.6"
 
+val kindProjectorV = "0.13.0"
+val betterMonadicForV = "0.3.1"
+
 lazy val commonSettings = Seq(
   scalaVersion := BuildScala, 
   crossScalaVersions := ScalaTargets,
-
-  addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.0" cross CrossVersion.full),
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
-
+  libraryDependencies ++= (CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, _))=>
+      Seq(
+        compilerPlugin("org.typelevel" % "kind-projector" % kindProjectorV cross CrossVersion.full),
+        compilerPlugin("com.olegpy"    %% "better-monadic-for" % betterMonadicForV)
+      )
+    case _ =>
+      Nil
+  }),
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
-    "io.chrisdavenport"           %% "mapref"                     % "0.1.1",
+    "io.chrisdavenport"           %% "mapref"                     % "0.2.0-M2",
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "com.codecommit"              %% "cats-effect-testing-specs2" % "0.5.3"       % Test,
