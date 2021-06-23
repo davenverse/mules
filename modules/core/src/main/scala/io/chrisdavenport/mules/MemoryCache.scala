@@ -2,10 +2,9 @@ package io.chrisdavenport.mules
 
 import cats._
 import cats.effect._
-import cats.effect.concurrent.Ref
-import cats.effect.syntax.concurrent._
+import cats.effect.kernel.{Ref, Sync}
+import cats.effect.syntax.all._
 import cats.implicits._
-import scala.concurrent.duration._
 import scala.collection.immutable.Map
 
 import io.chrisdavenport.mapref.MapRef
@@ -67,8 +66,8 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    **/
   def insertWithTimeout(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit] = {
     for {
-      now <- C.monotonic(NANOSECONDS)
-      timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now + ts.nanos))
+      now <- C.monotonic
+      timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now.toNanos + ts.nanos))
       _ <- mapRef.setKeyValue(k, MemoryCacheItem[V](v, timeout))
       _ <- onInsert(k, v)
     } yield ()
@@ -88,11 +87,11 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    * The function will eagerly delete the item from the cache if it is expired.
    **/
   def lookup(k: K): F[Option[V]] = {
-    C.monotonic(NANOSECONDS)
+    C.monotonic
       .flatMap{now =>
         mapRef(k).modify[F[Option[MemoryCacheItem[V]]]]{
           case s@Some(value) =>
-            if (MemoryCache.isExpired(now, value)){
+            if (MemoryCache.isExpired(now.toMillis, value)){
               (None, onDelete(k).as(None))
             } else {
               (s, F.pure(s))
@@ -117,12 +116,12 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    * The function will not delete the item from the cache.
    **/
   def lookupNoUpdate(k: K): F[Option[V]] =
-    C.monotonic(NANOSECONDS)
+    C.monotonic
       .flatMap{now =>
         mapRef(k).get.map(
           _.flatMap(ci =>
             Alternative[Option].guard(
-              !MemoryCache.isExpired(now, ci)
+              !MemoryCache.isExpired(now.toMillis, ci)
             ).as(ci)
           )
         )
@@ -217,8 +216,8 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    **/
   def purgeExpired: F[Unit] = {
     for {
-      now <- C.monotonic(NANOSECONDS)
-      out <- purgeExpiredEntries(now)
+      now <- C.monotonic
+      out <- purgeExpiredEntries(now.toMillis)
       _ <-  out.traverse_(onDelete)
     } yield ()
   }
@@ -296,13 +295,13 @@ object MemoryCache {
    *
    * @return an `Resource[F, Unit]` that will keep removing expired entries in the background.
    **/
-  def liftToAuto[F[_]: Concurrent: Timer, K, V](
+  def liftToAuto[F[_]: Temporal, K, V](
     memoryCache: MemoryCache[F, K, V],
     checkOnExpirationsEvery: TimeSpec
   ): Resource[F, Unit] = {
     def runExpiration(cache: MemoryCache[F, K, V]): F[Unit] = {
       val check = TimeSpec.toDuration(checkOnExpirationsEvery)
-      Timer[F].sleep(check) >> cache.purgeExpired >> runExpiration(cache)
+      Temporal[F].sleep(check) >> cache.purgeExpired >> runExpiration(cache)
     }
 
     Resource.make(runExpiration(memoryCache).start)(_.cancel).void
@@ -315,7 +314,7 @@ object MemoryCache {
     *
     * If the specified default expiration value is None, items inserted by insert will never expire.
     **/
-  def ofSingleImmutableMap[F[_]: Sync: Clock, K, V](
+  def ofSingleImmutableMap[F[_]: Sync, K, V](
     defaultExpiration: Option[TimeSpec]
   ): F[MemoryCache[F, K, V]] =
     Ref.of[F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
@@ -329,7 +328,7 @@ object MemoryCache {
         {_: K => Sync[F].unit}
       ))
 
-  def ofShardedImmutableMap[F[_]: Sync : Clock, K, V](
+  def ofShardedImmutableMap[F[_]: Sync, K, V](
     shardCount: Int,
     defaultExpiration: Option[TimeSpec]
   ): F[MemoryCache[F, K, V]] =
@@ -345,7 +344,7 @@ object MemoryCache {
       )
     }
 
-  def ofConcurrentHashMap[F[_]: Sync: Clock, K, V](
+  def ofConcurrentHashMap[F[_]: Sync, K, V](
     defaultExpiration: Option[TimeSpec],
     initialCapacity: Int = 16,
     loadFactor: Float = 0.75f,
@@ -363,7 +362,7 @@ object MemoryCache {
     )
   }
 
-  def ofMapRef[F[_]: Sync: Clock, K, V](
+  def ofMapRef[F[_]: Sync, K, V](
     mr: MapRef[F, K, Option[MemoryCacheItem[V]]],
     defaultExpiration: Option[TimeSpec]
   ): MemoryCache[F, K, V] = {
