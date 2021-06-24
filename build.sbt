@@ -48,7 +48,11 @@ lazy val bench = project.in(file("modules/bench"))
 lazy val core = project.in(file("modules/core"))
   .settings(commonSettings)
   .settings(
-    name := "mules"
+    name := "mules",
+    scalacOptions ++= (CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, _)) => Seq("-Xsource:3")
+      case _ => Nil
+    })
   )
 
 lazy val caffeine = project.in(file("modules/caffeine"))
@@ -75,7 +79,11 @@ lazy val reload = project.in(file("modules/reload"))
     name := "mules-reload",
     libraryDependencies ++= Seq(
       "org.typelevel"               %% "cats-collections-core"      % catsCollectionV
-    )
+    ),
+    scalacOptions ++= (CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, _)) => Seq("-Xsource:3")
+      case _ => Nil
+    })
   )
 
 val catsV = "2.6.1"
