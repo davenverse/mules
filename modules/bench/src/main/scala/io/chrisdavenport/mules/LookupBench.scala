@@ -81,7 +81,7 @@ object LookUpBench {
     var memoryCache: MemoryCache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val RT = IORuntime.global
+    implicit val RT: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {
@@ -94,7 +94,7 @@ object LookUpBench {
     var memoryCache: MemoryCache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val RT = IORuntime.global
+    implicit val RT: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {
@@ -109,7 +109,7 @@ object LookUpBench {
     var cache: Cache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val RT = IORuntime.global
+    implicit val RT: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {

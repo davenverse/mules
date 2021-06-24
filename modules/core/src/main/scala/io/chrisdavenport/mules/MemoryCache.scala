@@ -281,7 +281,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
 }
 
 object MemoryCache {
-  private case class MemoryCacheItem[A](
+  protected case class MemoryCacheItem[A](
     item: A,
     itemExpiration: Option[TimeSpec]
   )
@@ -320,12 +320,12 @@ object MemoryCache {
     Ref.of[F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
       .map(ref => new MemoryCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
-        {l: Long => SingleRef.purgeExpiredEntries(ref)(l)}.some,
+        {(l: Long) => SingleRef.purgeExpiredEntries(ref)(l)}.some,
         defaultExpiration,
         {(_, _) => Sync[F].unit},
         {(_, _) => Sync[F].unit},
-        {_: K => Sync[F].unit},
-        {_: K => Sync[F].unit}
+        {(_: K) => Sync[F].unit},
+        {(_: K) => Sync[F].unit}
       ))
 
   def ofShardedImmutableMap[F[_]: Sync, K, V](
@@ -339,8 +339,8 @@ object MemoryCache {
         defaultExpiration,
         {(_, _) => Sync[F].unit},
         {(_, _) => Sync[F].unit},
-        {_: K => Sync[F].unit},
-        {_: K => Sync[F].unit}
+        {(_: K) => Sync[F].unit},
+        {(_: K) => Sync[F].unit}
       )
     }
 
@@ -357,8 +357,8 @@ object MemoryCache {
       defaultExpiration,
       {(_, _) => Sync[F].unit},
       {(_, _) => Sync[F].unit},
-      {_: K => Sync[F].unit},
-      {_: K => Sync[F].unit}
+      {(_: K) => Sync[F].unit},
+      {(_: K) => Sync[F].unit}
     )
   }
 
@@ -372,8 +372,8 @@ object MemoryCache {
         defaultExpiration,
         {(_, _) => Sync[F].unit},
         {(_, _) => Sync[F].unit},
-        {_: K => Sync[F].unit},
-        {_: K => Sync[F].unit}
+        {(_: K) => Sync[F].unit},
+        {(_: K) => Sync[F].unit}
       )
   }
 

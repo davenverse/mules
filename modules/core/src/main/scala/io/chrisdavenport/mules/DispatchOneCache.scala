@@ -215,7 +215,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
 }
 
 object DispatchOneCache {
-  private case class DispatchOneCacheItem[F[_], A](
+  protected case class DispatchOneCacheItem[F[_], A](
     item: Deferred[F, Either[Throwable, A]],
     itemExpiration: Option[TimeSpec]
   )
@@ -253,7 +253,7 @@ object DispatchOneCache {
     Ref.of[F, Map[K, DispatchOneCacheItem[F, V]]](Map.empty[K, DispatchOneCacheItem[F, V]])
       .map(ref => new DispatchOneCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
-        {l: Long => SingleRef.purgeExpiredEntries(ref)(l)}.some,
+        {(l: Long) => SingleRef.purgeExpiredEntries(ref)(l)}.some,
         defaultExpiration
       ))
 

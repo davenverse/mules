@@ -13,7 +13,7 @@ final class TimeSpec private (
 }
 object TimeSpec {
 
-  implicit val instances = new Order[TimeSpec] with Show[TimeSpec]{
+  implicit val instances: Order[TimeSpec] = new Order[TimeSpec] with Show[TimeSpec]{
     override def compare(x: TimeSpec, y: TimeSpec): Int = 
       Order[Long].compare(x.nanos, y.nanos)
     override def show(t: TimeSpec): String = show"TimeSpec(${t.nanos})"
