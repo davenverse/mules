@@ -114,10 +114,11 @@ lazy val commonSettings = Seq(
     "io.chrisdavenport"           %% "mapref"                     % "0.2.0-M2",
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
-    "com.codecommit"              %% "cats-effect-testing-specs2" % "0.5.3"       % Test,
-    "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
-    "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
-    "org.typelevel"               %% "discipline-specs2"          % disciplineSpecs2V % Test,
+    "org.typelevel"               %% "cats-effect-testing-specs2" % "1.1.1"       % Test,
+    "org.scalameta"               %% "munit"                      % "0.7.26"      % Test,
+    "org.scalameta"               %% "munit-scalacheck"           % "0.7.26"      % Test,
+    "org.typelevel"               %% "munit-cats-effect-3"        % "1.0.5"       % Test,
+    "org.typelevel"               %% "discipline-munit"           % "1.0.9"       % Test,
   )
 )
 
@@ -137,5 +138,5 @@ inThisBuild(List(
       "-groups",
       "-sourcepath", (baseDirectory in LocalRootProject).value.getAbsolutePath,
       "-doc-source-url", "https://github.com/ChristopherDavenport/mules/blob/v" + version.value + "€{FILE_PATH}.scala"
-  ),
+  )
 ))
