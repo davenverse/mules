@@ -9,7 +9,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofSingleImmutableMap[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ = ctx.tick(1.nano)
+      _ <- IO.sleep(1.nano)
       value <- cache.lookup("Foo")
     } yield {
       assertEquals(value, Some(1))
@@ -31,7 +31,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofSingleImmutableMap[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       _ <- cache.purgeExpired
       value <- cache.lookupNoUpdate("Foo")
     } yield {
@@ -43,7 +43,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofSingleImmutableMap[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       value <- cache.lookup("Foo")
     } yield {
       assertEquals(value, None)
@@ -56,7 +56,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
       iCache <- MemoryCache.ofSingleImmutableMap[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       cache = iCache.setOnDelete(_ => checkWasTouched.set(true))
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       value <- cache.lookupNoUpdate("Foo")
       wasTouched <- checkWasTouched.get
     } yield {
@@ -69,7 +69,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofShardedImmutableMap[IO, String, Int](10, Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ = ctx.tick(1.nano)
+      _ <- IO.sleep(1.nano)
       value <- cache.lookup("Foo")
     } yield {
       assertEquals(value, Some(1))
@@ -91,7 +91,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofShardedImmutableMap[IO, String, Int](10, Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       _ <- cache.purgeExpired
       value <- cache.lookupNoUpdate("Foo")
     } yield {
@@ -103,7 +103,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofShardedImmutableMap[IO, String, Int](10, Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       value <- cache.lookup("Foo")
     } yield {
       assertEquals(value, None)
@@ -116,7 +116,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
       iCache <- MemoryCache.ofShardedImmutableMap[IO, String, Int](10, Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       cache = iCache.setOnDelete(_ => checkWasTouched.set(true))
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       value <- cache.lookupNoUpdate("Foo")
       wasTouched <- checkWasTouched.get
     } yield {
@@ -129,7 +129,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofConcurrentHashMap[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ = ctx.tick(1.nano)
+      _ <- IO.sleep(1.nano)
       value <- cache.lookup("Foo")
     } yield {
       assertEquals(value, Some(1))
@@ -151,7 +151,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofConcurrentHashMap[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       _ <- cache.purgeExpired
       value <- cache.lookupNoUpdate("Foo")
     } yield {
@@ -163,7 +163,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
     for {
       cache <- MemoryCache.ofConcurrentHashMap[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       value <- cache.lookup("Foo")
     } yield {
       assertEquals(value, None)
@@ -176,7 +176,7 @@ class MemoryCacheSpec extends CatsEffectSuite {
       iCache <- MemoryCache.ofConcurrentHashMap[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)))(Async[IO])
       cache = iCache.setOnDelete(_ => checkWasTouched.set(true))
       _ <- cache.insert("Foo", 1)
-      //_ <- Sync[IO].delay(ctx.tick(2.seconds))
+      _ <- IO.sleep(2.seconds)
       value <- cache.lookupNoUpdate("Foo")
       wasTouched <- checkWasTouched.get
     } yield {
