@@ -6,6 +6,7 @@ import cats.implicits._
 import org.specs2.mutable.Specification
 
 import scala.concurrent.duration._
+import cats.effect.Temporal
 
 class AutoMemoryCacheSpec extends Specification {
 
@@ -118,10 +119,10 @@ class AutoMemoryCacheSpec extends Specification {
 
 object WithTestContext {
 
-  def apply[A](f: TestContext => ContextShift[IO] => Timer[IO] => A): A = {
+  def apply[A](f: TestContext => ContextShift[IO] => Temporal[IO] => A): A = {
     val ctx = TestContext()
     val cs: ContextShift[IO] = IO.contextShift(ctx)
-    val timer: Timer[IO] = ctx.timer[IO]
+    val timer: Temporal[IO] = ctx.timer[IO]
     f(ctx)(cs)(timer)
   }
 

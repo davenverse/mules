@@ -7,6 +7,7 @@ import cats.effect._
 import cats.effect.IO
 import cats.effect.testing.specs2.CatsIO
 import io.chrisdavenport.mules.TimeSpec
+import cats.effect.Temporal
 
 class CaffeineCacheSpec extends Specification with CatsIO {
   "CaffeineCache" should {
@@ -14,7 +15,7 @@ class CaffeineCacheSpec extends Specification with CatsIO {
       val setup = for {
         cache <- CaffeineCache.build[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)), None, None)
         _ <- cache.insert("Foo", 1)
-        _ <- Timer[IO].sleep(1.milli)
+        _ <- Temporal[IO].sleep(1.milli)
         value <- cache.lookup("Foo")
       } yield value
       setup.map(_ must_=== Some(1))
@@ -36,7 +37,7 @@ class CaffeineCacheSpec extends Specification with CatsIO {
       val setup = for {
         cache <- CaffeineCache.build[IO, String, Int](Some(TimeSpec.unsafeFromDuration(1.second)), None, None)
         _ <- cache.insert("Foo", 1)
-        _ <- Timer[IO].sleep(2.second)
+        _ <- Temporal[IO].sleep(2.second)
         value <- cache.lookup("Foo")
       } yield value
       setup.map(_ must_=== None)
