@@ -82,7 +82,7 @@ val catsEffectV = "3.1.0"
 val catsCollectionV = "0.9.2"
 
 val munitV = "0.7.25"
-val munitCEV = "1.0.2"
+val munitCEV = "1.0.5"
 
 lazy val commonSettings = Seq(
   scalaVersion := "2.13.5",
