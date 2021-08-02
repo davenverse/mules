@@ -79,7 +79,7 @@ lazy val reload = project.in(file("modules/reload"))
 
 val catsV = "2.6.1"
 val catsEffectV = "3.1.0"
-val catsCollectionV = "0.9.2"
+val catsCollectionV = "0.9.3"
 
 val munitV = "0.7.25"
 val munitCEV = "1.0.2"
