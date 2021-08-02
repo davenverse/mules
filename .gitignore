@@ -10,3 +10,8 @@ tags
 .metals
 project/metals.sbt
 .bsp/
+
+# gtags
+GPATH
+GRTAGS
+GTAGS
