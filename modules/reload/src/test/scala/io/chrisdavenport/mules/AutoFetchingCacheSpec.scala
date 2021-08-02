@@ -2,7 +2,6 @@ package io.chrisdavenport.mules
 package reload
 
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import munit._
 
@@ -31,7 +30,7 @@ class AutoFetchingCacheSpec extends CatsEffectSuite {
         count.update( _ + 1).as(1)
       )
       _ <- cache.lookupCurrent("Foo")
-      _ <- Timer[IO].sleep(2.seconds)
+      _ <- Temporal[IO].sleep(2.seconds)
       value <- cache.lookupCurrent("Foo")
       cValue <- count.get
     } yield {
@@ -48,7 +47,7 @@ class AutoFetchingCacheSpec extends CatsEffectSuite {
         count.update( _ + 1).as(1)
       )
       _ <- cache.lookupCurrent("Foo")
-      _ <- Timer[IO].sleep(2.seconds)
+      _ <- Temporal[IO].sleep(2.seconds)
       value <- cache.lookupCurrent("Foo")
       cValue <- count.get
 
@@ -68,7 +67,7 @@ class AutoFetchingCacheSpec extends CatsEffectSuite {
         count.update( _ + 1) *> count.get
       )
       _ <- cache.lookupCurrent("Foo")
-      _ <- Timer[IO].sleep(2.seconds)
+      _ <- Temporal[IO].sleep(2.seconds)
       value <- cache.lookupCurrent("Foo")
       cValue <- count.get
 

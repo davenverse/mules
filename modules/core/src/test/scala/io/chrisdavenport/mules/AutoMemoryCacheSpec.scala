@@ -1,6 +1,5 @@
 package io.chrisdavenport.mules
 
-import cats.effect.laws.util.TestContext
 import cats.effect._
 import cats.syntax.all._
 import munit._
@@ -8,15 +7,8 @@ import munit._
 import scala.concurrent.duration._
 
 class AutoMemoryCacheSpec extends CatsEffectSuite {
-  val cacheKeyExpiration    = TimeSpec.unsafeFromDuration(12.hours)
+  val cacheKeyExpiration    = TimeSpec.unsafeFromDuration(1200.millis)
   val checkExpirationsEvery = TimeSpec.unsafeFromDuration(10.millis)
-
-  private val ctx = TestContext()
-
-  implicit override def munitContextShift: ContextShift[IO] =
-    IO.contextShift(ctx)
-  implicit override def munitTimer: Timer[IO] =
-    ctx.timer
 
   test("Auto MemoryCache.ofSingleImmutableMap should expire keys") {
     Resource.eval(MemoryCache.ofSingleImmutableMap[IO, Int, String](cacheKeyExpiration.some))
@@ -24,11 +16,11 @@ class AutoMemoryCacheSpec extends CatsEffectSuite {
       .use(cache =>
         for {
           _ <- cache.insert(1, "foo")
-          _ <- IO(ctx.tick(5.hours))
+          _ <- IO.sleep(500.millis)
           _ <- cache.insert(2, "bar")
           a1 <- cache.lookupNoUpdate(1)
           b1 <- cache.lookupNoUpdate(2)
-          _ <- IO(ctx.tick(7.hours + 1.second)) // expiration time reached
+          _ <- IO.sleep(700.millis + 100.millis) // expiration time reached
           a2 <- cache.lookupNoUpdate(1)
           b2 <- cache.lookupNoUpdate(2)
         } yield {
@@ -46,12 +38,12 @@ class AutoMemoryCacheSpec extends CatsEffectSuite {
       .use(cache =>
       for {
         _ <- cache.insert(1, "foo")
-        _ <- IO(ctx.tick(5.hours))
+        _ <- IO.sleep(500.millis)
         a1 <- cache.lookupNoUpdate(1)
         _ <- cache.insert(1, "bar")
-        _ <- IO(ctx.tick(7.hours + 1.second)) // expiration time reached for first timestamp
+        _ <- IO.sleep(700.millis + 100.millis) // expiration time reached for first timestamp
         a2 <- cache.lookupNoUpdate(1)
-        _ <- IO(ctx.tick(5.hours)) // expiration time reached for last timestamp
+        _ <- IO.sleep(500.millis) // expiration time reached for last timestamp
         a3 <- cache.lookupNoUpdate(1)
       } yield {
         assert(a1.contains("foo"))
@@ -66,11 +58,11 @@ class AutoMemoryCacheSpec extends CatsEffectSuite {
       .use(cache =>
         for {
           _ <- cache.insert(1, "foo")
-          _ <- IO(ctx.tick(5.hours))
+          _ <- IO.sleep(500.millis)
           _ <- cache.insert(2, "bar")
           a1 <- cache.lookupNoUpdate(1)
           b1 <- cache.lookupNoUpdate(2)
-          _ <- IO(ctx.tick(7.hours + 1.second)) // expiration time reached
+          _ <- IO.sleep(700.millis + 100.millis) // expiration time reached
           a2 <- cache.lookupNoUpdate(1)
           b2 <- cache.lookupNoUpdate(2)
         } yield {
@@ -88,12 +80,12 @@ class AutoMemoryCacheSpec extends CatsEffectSuite {
       .use(cache =>
       for {
         _ <- cache.insert(1, "foo")
-        _ <- IO(ctx.tick(5.hours))
+        _ <- IO.sleep(500.millis)
         a1 <- cache.lookupNoUpdate(1)
         _ <- cache.insert(1, "bar")
-        _ <- IO(ctx.tick(7.hours + 1.second)) // expiration time reached for first timestamp
+        _ <- IO.sleep(700.millis + 100.millis) // expiration time reached for first timestamp
         a2 <- cache.lookupNoUpdate(1)
-        _ <- IO(ctx.tick(5.hours)) // expiration time reached for last timestamp
+        _ <- IO.sleep(500.millis) // expiration time reached for last timestamp
         a3 <- cache.lookupNoUpdate(1)
       } yield {
         assert(a1.contains("foo"))

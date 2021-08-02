@@ -78,7 +78,7 @@ lazy val reload = project.in(file("modules/reload"))
   )
 
 val catsV = "2.6.1"
-val catsEffectV = "2.5.1"
+val catsEffectV = "3.1.0"
 val catsCollectionV = "0.9.2"
 
 val munitV = "0.7.25"
@@ -96,12 +96,12 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
-    "io.chrisdavenport"           %% "mapref"                     % "0.1.1",
+    "io.chrisdavenport"           %% "mapref"                     % "0.2.0-M1",
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "org.scalameta"               %% "munit"                      % munitV        % Test,
     "org.scalameta"               %% "munit-scalacheck"           % munitV        % Test,
-    "org.typelevel"               %% "munit-cats-effect-2"        % munitCEV      % Test,
+    "org.typelevel"               %% "munit-cats-effect-3"        % munitCEV      % Test,
   )
 )
 
