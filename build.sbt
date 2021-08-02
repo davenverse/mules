@@ -81,8 +81,8 @@ val catsV = "2.6.1"
 val catsEffectV = "3.1.0"
 val catsCollectionV = "0.9.2"
 
-val munitV = "0.7.27"
-val munitCEV = "1.0.2"
+val munitV = "0.7.25"
+val munitCEV = "1.0.5"
 
 lazy val commonSettings = Seq(
   scalaVersion := "2.13.5",
@@ -96,7 +96,7 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
-    "io.chrisdavenport"           %% "mapref"                     % "0.2.0-M1",
+    "io.chrisdavenport"           %% "mapref"                     % "0.2.0-M2",
 
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "org.scalameta"               %% "munit"                      % munitV        % Test,
