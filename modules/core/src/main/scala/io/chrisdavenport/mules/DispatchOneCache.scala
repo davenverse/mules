@@ -17,23 +17,8 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
   import DispatchOneCache.DispatchOneCacheItem
   import DispatchOneCache.CancelationDuringDispatchOneCacheInsertProcessing
 
-  private def purgeExpiredEntriesDefault(now: Long): F[List[K]] = {
-    mapRef.keys.flatMap(l =>
-      l.flatTraverse(k =>
-        mapRef(k).modify(optItem =>
-          optItem.map(item =>
-            if (DispatchOneCache.isExpired(now, item))
-              (None, List(k))
-            else
-              (optItem, List.empty)
-          ).getOrElse((optItem, List.empty))
-        )
-      )
-    )
-  }
-
   private val purgeExpiredEntries: Long => F[List[K]] =
-    purgeExpiredEntriesOpt.getOrElse(purgeExpiredEntriesDefault)
+    purgeExpiredEntriesOpt.getOrElse({(_: Long) => List.empty[K].pure[F]})
 
   private val emptyFV = F.pure(Option.empty[Deferred[F, Either[Throwable, V]]])
 
@@ -214,11 +199,11 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
 }
 
 object DispatchOneCache {
-  private case class DispatchOneCacheItem[F[_], A](
+  case class DispatchOneCacheItem[F[_], A](
     item: Deferred[F, Either[Throwable, A]],
     itemExpiration: Option[TimeSpec]
   )
-  private case object CancelationDuringDispatchOneCacheInsertProcessing extends scala.util.control.NoStackTrace
+  case object CancelationDuringDispatchOneCacheInsertProcessing extends scala.util.control.NoStackTrace
 
   /**
    *
@@ -252,7 +237,7 @@ object DispatchOneCache {
     Ref.of[F, Map[K, DispatchOneCacheItem[F, V]]](Map.empty[K, DispatchOneCacheItem[F, V]])
       .map(ref => new DispatchOneCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
-        {l: Long => SingleRef.purgeExpiredEntries(ref)(l)}.some,
+        {(l: Long) => SingleRef.purgeExpiredEntries(ref)(l)}.some,
         defaultExpiration
       ))
 

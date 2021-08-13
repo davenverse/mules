@@ -32,7 +32,7 @@ class AutoMemoryCacheSpec extends CatsEffectSuite {
       )
   }
 
-  test("Auto MemoryCache.ofSingleImmutableMap should resets expiration") {
+  test("Auto MemoryCache.ofSingleImmutableMap should resets expiration".flaky) {
     Resource.eval(MemoryCache.ofSingleImmutableMap[IO, Int, String](cacheKeyExpiration.some))
       .flatMap(cache => MemoryCache.liftToAuto(cache, checkExpirationsEvery).as(cache))
       .use(cache =>

@@ -6,7 +6,6 @@ import cats.effect.std.Semaphore
 import cats.syntax.all._
 import cats.collections.Dequeue
 import io.chrisdavenport.mules._
-import io.chrisdavenport.mules.reload.AutoFetchingCache.Refresh
 
 import scala.collection.immutable.Map
 import scala.concurrent.duration.Duration
@@ -14,7 +13,7 @@ import scala.concurrent.duration.Duration
 class AutoFetchingCache[F[_]: Temporal, K, V](
   private val values: Ref[F, Map[K, AutoFetchingCache.CacheContent[F, V]]],
   val defaultExpiration: Option[TimeSpec],
-  private val refresh: Option[Refresh[F, K]],
+  private val refresh: Option[AutoFetchingCache.Refresh[F, K]],
   val fetch: K => F[V]
 ) extends Lookup[F, K, V] {
   import AutoFetchingCache._
@@ -25,9 +24,9 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
   def cancelReloads: F[Unit] =
     refresh.fold(Applicative[F].unit)(_.cancelAll)
 
-  private def extractContentT(k: K, t: TimeSpec)(content: CacheContent[F, V]): F[V] = content match {
-    case v0: Fetching[F, V] => v0.f.join.flatMap(succeedOrThrow(_))
-    case v0: CacheItem[F, V] =>
+  private def extractContentT(k: K, t: TimeSpec)(content: AutoFetchingCache.CacheContent[F, V]): F[V] = content match {
+    case v0: AutoFetchingCache.Fetching[F, V] => v0.f.join.flatMap(succeedOrThrow(_))
+    case v0: AutoFetchingCache.CacheItem[F, V] =>
       if (isExpired(t, v0)) fetchAndInsert(k)
       else Applicative[F].pure(v0.item)
   }
@@ -45,7 +44,7 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
     insertWithTimeout(defaultExpiration)(k, v)
 
   private def insertFetching(k: K)(f: Fiber[F, Throwable, V]): F[Unit] = {
-    values.update(_ + (k -> Fetching[F, V](f)))
+    values.update(_ + (k -> AutoFetchingCache.Fetching[F, V](f)))
   }
 
   /**
@@ -61,11 +60,11 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
     for {
       now <- Clock[F].monotonic
       timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now.toNanos + ts.nanos))
-      _ <- values.update(_ + (k -> CacheItem[F, V](v, timeout)))
+      _ <- values.update(_ + (k -> AutoFetchingCache.CacheItem[F, V](v, timeout)))
     } yield ()
   }
 
-  private def isExpired(checkAgainst: TimeSpec, cacheItem: CacheItem[F, V]): Boolean = {
+  private def isExpired(checkAgainst: TimeSpec, cacheItem: AutoFetchingCache.CacheItem[F, V]): Boolean = {
     cacheItem.itemExpiration.fold(false) {
       case e if e.nanos < checkAgainst.nanos => true
       case _ => false
@@ -93,7 +92,7 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
     Clock[F].monotonic
       .flatMap(now => lookupItemT(k, TimeSpec.unsafeFromNanos(now.toNanos)))
 
-  private def lookupItemSimple(k: K): F[Option[CacheContent[F, V]]] =
+  private def lookupItemSimple(k: K): F[Option[AutoFetchingCache.CacheContent[F, V]]] =
     values.get.map(_.get(k))
 
 
@@ -117,13 +116,13 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
           )
           _ <- insertFetching(k)(fiber)
           outcome <- fiber.join
-          newValue <- succeedOrThrow(outcome)
+          newValue <- AutoFetchingCache.succeedOrThrow(outcome)
           out <- insert(k, newValue)
         } yield out
       }.handleErrorWith(_ => loop()) >> loop()
 
       r match {
-        case BoundedRefresh(_, s, tasks) =>
+        case AutoFetchingCache.BoundedRefresh(_, s, tasks) =>
           def cancel(m: Map[K, (Int, Fiber[F, Throwable, Unit])], popped: Option[K]): F[Map[K, (Int, Fiber[F, Throwable, Unit])]] =
             (for {
               k <- popped
@@ -133,21 +132,22 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
               else Applicative[F].pure(m)
             ).getOrElse(Applicative[F].pure(m))
 
-            s.permit.use { _ =>
-              for {
-                (m, queue) <- tasks.get
-                (newq, popped) = queue.push(k)
-                m1 <- cancel(m, popped)
-                m2 <- m1.get(k) match {
-                  case None => Concurrent[F].start(loop()).map(f => m1 + (k -> ((1, f))))
-                  case Some((cpt, f)) => Applicative[F].pure(m1 + (k -> ((cpt + 1, f))))
-                }
-                _ <- tasks.set((m2, newq))
-              } yield ()
-            }
+          s.permit.use { _ =>
+            for {
+              t <- tasks.get
+              (m, queue) = t
+              (newq, popped) = queue.push(k)
+              m1 <- cancel(m, popped)
+              m2 <- m1.get(k) match {
+                case None => Concurrent[F].start(loop()).map(f => m1 + (k -> ((1, f))))
+                case Some((cpt, f)) => Applicative[F].pure(m1 + (k -> ((cpt + 1, f))))
+              }
+              _ <- tasks.set((m2, newq))
+            } yield ()
+          }
 
 
-          case UnboundedRefresh(_, s, tasks) =>
+        case AutoFetchingCache.UnboundedRefresh(_, s, tasks) =>
             s.permit.use { _ =>
               for {
                 m <- tasks.get
@@ -171,9 +171,9 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
 }
 
 object AutoFetchingCache {
-  final object FetchCancelled extends RuntimeException
+  object FetchCancelled extends RuntimeException
 
-  private def succeedOrThrow[F[_]: ApplicativeThrow, A](
+  private[reload] def succeedOrThrow[F[_]: ApplicativeThrow, A](
     outcome: Outcome[F, Throwable, A]
   ): F[A] =
     outcome match {
@@ -182,13 +182,13 @@ object AutoFetchingCache {
       case Outcome.Errored(e) => e.raiseError[F, A]
     }
 
-  private sealed trait Refresh[F[_], K] {
+  private[reload] sealed trait Refresh[F[_], K] {
     def period: TimeSpec
 
     def cancelAll: F[Unit]
   }
 
-  final private case class BoundedRefresh[F[_] : Monad, K](
+  final private[reload] case class BoundedRefresh[F[_] : Monad, K](
     period: TimeSpec,
     s: Semaphore[F],
     tasks: Ref[F, (Map[K, (Int, Fiber[F, Throwable, Unit])], BoundedQueue[K])]
@@ -200,7 +200,7 @@ object AutoFetchingCache {
       }.flatten
   }
 
-  final private case class UnboundedRefresh[F[_] : Monad, K](
+  final private[reload] case class UnboundedRefresh[F[_] : Monad, K](
     period: TimeSpec,
     s: Semaphore[F],
     tasks: Ref[F, Map[K, Fiber[F, Throwable, Unit]]]
@@ -222,15 +222,15 @@ object AutoFetchingCache {
    *
    * CacheItem - A value in the cache.
    */
-  private sealed abstract class CacheContent[F[_], A]
+  private[reload] sealed abstract class CacheContent[F[_], A]
 
-  private case class Fetching[F[_], A](f: Fiber[F, Throwable, A]) extends CacheContent[F, A]
-  private case class CacheItem[F[_], A](
+  private[reload] case class Fetching[F[_], A](f: Fiber[F, Throwable, A]) extends CacheContent[F, A]
+  private[reload] case class CacheItem[F[_], A](
     item: A,
     itemExpiration: Option[TimeSpec]
   ) extends CacheContent[F, A]
 
-  final private case class BoundedQueue[A](maxSize: Int, currentSize: Int, queue: Dequeue[A]) {
+  final private[reload] case class BoundedQueue[A](maxSize: Int, currentSize: Int, queue: Dequeue[A]) {
 
     def push(a : A): (BoundedQueue[A], Option[A]) = {
       if((currentSize + 1) > maxSize)
@@ -243,7 +243,7 @@ object AutoFetchingCache {
     }
   }
 
-  private object BoundedQueue {
+  private[reload] object BoundedQueue {
     def empty[A](maxSize : Int) : BoundedQueue[A] = BoundedQueue(maxSize, 0, Dequeue.empty)
   }
 

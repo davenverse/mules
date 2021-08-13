@@ -1,125 +1,79 @@
-val Scala213 = "2.13.5"
+ThisBuild / crossScalaVersions := Seq("2.12.13", "2.13.6", "3.0.1")
 
-ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213)
-ThisBuild / scalaVersion := crossScalaVersions.value.last
+ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
-ThisBuild / githubWorkflowArtifactUpload := false
+val catsV = "2.6.1"
+val catsEffectV = "3.2.2"
+val catsCollectionV = "0.9.3"
 
-ThisBuild / githubWorkflowBuild := Seq(
-  WorkflowStep.Sbt(List("test", "mimaReportBinaryIssues")),
-)
-
-ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
-
-// currently only publishing tags
-ThisBuild / githubWorkflowPublishTargetBranches :=
-  Seq(RefPredicate.StartsWith(Ref.Tag("v")))
-
-ThisBuild / githubWorkflowPublishPreamble +=
-  WorkflowStep.Use(UseRef.Public("olafurpg", "setup-gpg", "v3"))
-
-ThisBuild / githubWorkflowPublish := Seq(
-  WorkflowStep.Sbt(
-    List("ci-release"),
-    name = Some("Publish artifacts to Sonatype"),
-    env = Map(
-      "PGP_PASSPHRASE" -> "${{ secrets.PGP_PASSPHRASE }}",
-      "PGP_SECRET" -> "${{ secrets.PGP_SECRET }}",
-      "SONATYPE_PASSWORD" -> "${{ secrets.SONATYPE_PASSWORD }}",
-      "SONATYPE_USERNAME" -> "${{ secrets.SONATYPE_USERNAME }}"
-    )
-  ),
-)
+val munitV = "0.7.25"
+val munitCEV = "1.0.5"
 
 lazy val mules = project.in(file("."))
   .disablePlugins(MimaPlugin)
-  .settings(skip in publish := true)
-  .settings(commonSettings)
-  .aggregate(core, caffeine, reload, noop, bench)
+  .enablePlugins(NoPublishPlugin)
+  .aggregate(core.jvm, core.js, caffeine, reload.jvm, reload.js, noop.jvm, noop.js, bench)
 
 lazy val bench = project.in(file("modules/bench"))
-  .disablePlugins(MimaPlugin)
   .enablePlugins(JmhPlugin)
-  .settings(skip in publish := true)
-  .settings(commonSettings)
-  .dependsOn(core, caffeine)
+  .disablePlugins(MimaPlugin)
+  .enablePlugins(NoPublishPlugin)
+  .dependsOn(core.jvm, caffeine)
 
-lazy val core = project.in(file("modules/core"))
-  .settings(commonSettings)
+lazy val core = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("modules/core"))
   .settings(
-    name := "mules"
+    name := "mules",
+    libraryDependencies ++= Seq(
+      "org.typelevel"               %%% "cats-core"                  % catsV,
+      "org.typelevel"               %%% "cats-effect"                % catsEffectV,
+      "io.chrisdavenport"           %%% "mapref"                     % "0.2.0",
+    ),
+  ).settings(testDeps)
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule)},
   )
 
 lazy val caffeine = project.in(file("modules/caffeine"))
-  .settings(commonSettings)
-  .dependsOn(core)
+  .dependsOn(core.jvm)
   .settings(
     name := "mules-caffeine",
     libraryDependencies ++= Seq(
       "com.github.ben-manes.caffeine" % "caffeine" % "2.9.2"
-    )
-  )
+    ),
+  ).settings(testDeps)
 
-lazy val noop = project.in(file("modules/noop"))
-  .settings(commonSettings)
+lazy val noop = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("modules/noop"))
   .dependsOn(core)
   .settings(
     name := "mules-noop"
+  ).settings(testDeps)
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule)},
   )
 
-lazy val reload = project.in(file("modules/reload"))
-  .settings(commonSettings)
+lazy val reload = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("modules/reload"))
   .dependsOn(core)
   .settings(
     name := "mules-reload",
     libraryDependencies ++= Seq(
-      "org.typelevel"               %% "cats-collections-core"      % catsCollectionV
-    )
+      "org.typelevel"               %%% "cats-collections-core"      % catsCollectionV
+    ),
+  ).settings(testDeps)
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule)},
   )
 
-val catsV = "2.6.1"
-val catsEffectV = "3.1.0"
-val catsCollectionV = "0.9.2"
-
-val munitV = "0.7.28"
-val munitCEV = "1.0.5"
-
-lazy val commonSettings = Seq(
-  scalaVersion := "2.13.5",
-  crossScalaVersions := Seq(scalaVersion.value, "2.12.12"),
-
-  addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.0" cross CrossVersion.full),
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
-
-  testFrameworks += new TestFramework("munit.Framework"),
-
+lazy val testDeps = Seq(
   libraryDependencies ++= Seq(
-    "org.typelevel"               %% "cats-core"                  % catsV,
-    "org.typelevel"               %% "cats-effect"                % catsEffectV,
-    "io.chrisdavenport"           %% "mapref"                     % "0.2.0-M2",
-
-    "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
-    "org.scalameta"               %% "munit"                      % munitV        % Test,
-    "org.scalameta"               %% "munit-scalacheck"           % munitV        % Test,
-    "org.typelevel"               %% "munit-cats-effect-3"        % munitCEV      % Test,
+    "org.typelevel" %%% "cats-effect-laws" % catsEffectV % Test,
+    "org.scalameta" %%% "munit" % munitV % Test,
+    "org.scalameta" %%% "munit-scalacheck" % munitV % Test,
+    "org.typelevel" %%% "munit-cats-effect-3" % munitCEV % Test,
   )
 )
-
-inThisBuild(List(
-  organization := "io.chrisdavenport",
-  homepage := Some(url("https://github.com/ChristopherDavenport/mules")),
-  licenses += ("MIT", url("http://opensource.org/licenses/MIT")),
-  developers := List(
-    Developer(
-      "ChristopherDavenport",
-      "Christopher Davenport",
-      "chris@christopherdavenport.tech",
-      url("https://github.com/ChristopherDavenport")
-    )
-  ),
-  scalacOptions in (Compile, doc) ++= Seq(
-      "-groups",
-      "-sourcepath", (baseDirectory in LocalRootProject).value.getAbsolutePath,
-      "-doc-source-url", "https://github.com/ChristopherDavenport/mules/blob/v" + version.value + "€{FILE_PATH}.scala"
-  ),
-))
