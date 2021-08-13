@@ -8,10 +8,11 @@ tags
 
 .bloop
 .metals
-project/metals.sbt
+metals.sbt
 .bsp/
 
 # gtags
 GPATH
 GRTAGS
 GTAGS
+.vscode

@@ -19,30 +19,13 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private val onCacheHit: (K, V) => F[Unit],
   private val onCacheMiss: K => F[Unit],
   private val onDelete: K => F[Unit]
-)(implicit val F: Sync[F], val C: Clock[F]) extends Cache[F, K, V] {
+)(implicit val F: Temporal[F]) extends Cache[F, K, V] {
   import MemoryCache.MemoryCacheItem
   private val noneF: F[None.type] = Applicative[F].pure(None)
-  private def noneFA[A]: F[Option[A]] = noneF.widen
-
-  private def purgeExpiredEntriesDefault(now: Long): F[List[K]] = {
-    keys.flatMap(l =>
-      l.flatTraverse(k =>
-        mapRef(k).modify(optItem =>
-          optItem.map(item =>
-            if (MemoryCache.isExpired(now, item))
-              (None, List(k))
-            else
-              (optItem, List.empty)
-          ).getOrElse((optItem, List.empty))
-        )
-      )
-    )
-  }
+  private def noneFA[A]: F[Option[A]] = noneF.asInstanceOf[F[Option[A]]]
 
   val purgeExpiredEntries: Long => F[List[K]] =
-    purgeExpiredEntriesOpt.getOrElse(purgeExpiredEntriesDefault)
-
-  val keys : F[List[K]] = mapRef.keys
+    purgeExpiredEntriesOpt.getOrElse({(_: Long) => List.empty[K].pure[F]})
 
   /**
    * Delete an item from the cache. Won't do anything if the item is not present.
@@ -65,7 +48,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    **/
   def insertWithTimeout(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit] = {
     for {
-      now <- C.monotonic
+      now <- Clock[F].monotonic
       timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now.toNanos + ts.nanos))
       _ <- mapRef.setKeyValue(k, MemoryCacheItem[V](v, timeout))
       _ <- onInsert(k, v)
@@ -86,7 +69,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    * The function will eagerly delete the item from the cache if it is expired.
    **/
   def lookup(k: K): F[Option[V]] = {
-    C.monotonic
+    Clock[F].monotonic
       .flatMap{now =>
         mapRef(k).modify[F[Option[MemoryCacheItem[V]]]]{
           case s@Some(value) =>
@@ -115,7 +98,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    * The function will not delete the item from the cache.
    **/
   def lookupNoUpdate(k: K): F[Option[V]] =
-    C.monotonic
+    Clock[F].monotonic
       .flatMap{now =>
         mapRef(k).get.map(
           _.flatMap(ci =>
@@ -201,13 +184,6 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
       onDelete
     )
 
-
-  /**
-   * Return the size of the cache, including expired items.
-   **/
-  def size: F[Int] =
-    keys.map(_.size)
-
   /**
    * Delete all items that are expired.
    *
@@ -215,7 +191,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
    **/
   def purgeExpired: F[Unit] = {
     for {
-      now <- C.monotonic
+      now <- Clock[F].monotonic
       out <- purgeExpiredEntries(now.toNanos)
       _ <-  out.traverse_(onDelete)
     } yield ()
@@ -280,7 +256,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
 }
 
 object MemoryCache {
-  private case class MemoryCacheItem[A](
+  case class MemoryCacheItem[A](
     item: A,
     itemExpiration: Option[TimeSpec]
   )
@@ -313,21 +289,21 @@ object MemoryCache {
     *
     * If the specified default expiration value is None, items inserted by insert will never expire.
     **/
-  def ofSingleImmutableMap[F[_]: Sync, K, V](
+  def ofSingleImmutableMap[F[_]: Temporal, K, V](
     defaultExpiration: Option[TimeSpec]
   ): F[MemoryCache[F, K, V]] =
     Ref.of[F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
       .map(ref => new MemoryCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
-        {l: Long => SingleRef.purgeExpiredEntries(ref)(l)}.some,
+        {(l: Long) => SingleRef.purgeExpiredEntries(ref)(l)}.some,
         defaultExpiration,
-        {(_, _) => Sync[F].unit},
-        {(_, _) => Sync[F].unit},
-        {_: K => Sync[F].unit},
-        {_: K => Sync[F].unit}
+        {(_, _) => Concurrent[F].unit},
+        {(_, _) =>  Concurrent[F].unit},
+        {(_: K) =>  Concurrent[F].unit},
+        {(_: K) =>  Concurrent[F].unit}
       ))
 
-  def ofShardedImmutableMap[F[_]: Sync, K, V](
+  def ofShardedImmutableMap[F[_]: Temporal, K, V](
     shardCount: Int,
     defaultExpiration: Option[TimeSpec]
   ): F[MemoryCache[F, K, V]] =
@@ -336,32 +312,32 @@ object MemoryCache {
         _,
         None,
         defaultExpiration,
-        {(_, _) => Sync[F].unit},
-        {(_, _) => Sync[F].unit},
-        {_: K => Sync[F].unit},
-        {_: K => Sync[F].unit}
+        {(_, _) => Concurrent[F].unit},
+        {(_, _) => Concurrent[F].unit},
+        {(_: K) => Applicative[F].unit},
+        {(_: K) => Applicative[F].unit}
       )
     }
 
-  def ofConcurrentHashMap[F[_]: Sync, K, V](
+  def ofConcurrentHashMap[F[_]: Temporal, K, V](
     defaultExpiration: Option[TimeSpec],
     initialCapacity: Int = 16,
     loadFactor: Float = 0.75f,
     concurrencyLevel: Int = 16,
-  ): F[MemoryCache[F, K, V]] = Sync[F].delay{
+  ): F[MemoryCache[F, K, V]] = Concurrent[F].unit.map{_ =>
     val chm = new ConcurrentHashMap[K, MemoryCacheItem[V]](initialCapacity, loadFactor, concurrencyLevel)
     new MemoryCache[F, K, V](
       MapRef.fromConcurrentHashMap(chm),
       None,
       defaultExpiration,
-      {(_, _) => Sync[F].unit},
-      {(_, _) => Sync[F].unit},
-      {_: K => Sync[F].unit},
-      {_: K => Sync[F].unit}
+      {(_, _) => Applicative[F].unit},
+      {(_, _) => Applicative[F].unit},
+      {(_: K) => Applicative[F].unit},
+      {(_: K) => Applicative[F].unit}
     )
   }
 
-  def ofMapRef[F[_]: Sync, K, V](
+  def ofMapRef[F[_]: Temporal, K, V](
     mr: MapRef[F, K, Option[MemoryCacheItem[V]]],
     defaultExpiration: Option[TimeSpec]
   ): MemoryCache[F, K, V] = {
@@ -369,10 +345,10 @@ object MemoryCache {
         mr,
         None,
         defaultExpiration,
-        {(_, _) => Sync[F].unit},
-        {(_, _) => Sync[F].unit},
-        {_: K => Sync[F].unit},
-        {_: K => Sync[F].unit}
+        {(_, _) => Applicative[F].unit},
+        {(_, _) => Applicative[F].unit},
+        {(_: K) => Applicative[F].unit},
+        {(_: K) => Applicative[F].unit}
       )
   }
 
