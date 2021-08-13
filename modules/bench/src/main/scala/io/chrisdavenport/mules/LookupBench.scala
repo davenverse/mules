@@ -8,7 +8,6 @@ import cats.effect._
 import cats.effect.unsafe.IORuntime
 import io.chrisdavenport.mules.caffeine.CaffeineCache
 
-
 @BenchmarkMode(Array(Mode.Throughput))
 // @OutputTimeUnit(TimeUnit.MILLISECONDS)
 class LookUpBench {
@@ -81,11 +80,11 @@ object LookUpBench {
     var memoryCache: MemoryCache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val R = IORuntime.global
+    implicit val R: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {
-      memoryCache = MemoryCache.ofSingleImmutableMap[IO, Int, String](None).unsafeRunSync()
+      memoryCache = MemoryCache.ofSingleImmutableMap[IO, Int, String](None).unsafeRunSync()(R)
     }
 
   }
@@ -94,27 +93,28 @@ object LookUpBench {
     var memoryCache: MemoryCache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val R = IORuntime.global
+    implicit val R: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {
-      memoryCache = MemoryCache.ofConcurrentHashMap[IO, Int, String](None).unsafeRunSync()
-      memoryCache.insert(1, "yellow").unsafeRunSync()
+      memoryCache = MemoryCache.ofConcurrentHashMap[IO, Int, String](None).unsafeRunSync()(R)
+      memoryCache.insert(1, "yellow").unsafeRunSync()(R)
     }
 
   }
 
   @State(Scope.Benchmark)
   class BenchStateCaffeine {
+
     var cache: Cache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
     val readList : List[Int] = (1 to 100).toList
-    implicit val R = IORuntime.global
+    implicit val R: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
     def setup(): Unit = {
-      cache = CaffeineCache.build[IO, Int, String](None, None, None).unsafeRunSync()
-      cache.insert(1, "yellow").unsafeRunSync()
+      cache = CaffeineCache.build[IO, Int, String](None, None, None).unsafeRunSync()(R)
+      cache.insert(1, "yellow").unsafeRunSync()(R)
     }
   }
 }

@@ -10,7 +10,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
     for {
       ref <- Ref[IO].of(0)
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-      action = {_: Unit => Temporal[IO].sleep(1.second) >> ref.modify(i => (i+1, i))}
+      action = {(_: Unit) => Temporal[IO].sleep(1.second) >> ref.modify(i => (i+1, i))}
       first <- cache.lookupOrLoad((), action).start
       second <- cache.lookupOrLoad((), action).start
       third <- cache.lookupOrLoad((), action).start
@@ -39,7 +39,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
   test("DispatchOneCache should insert places a value") {
     for {
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-      action = {_: Unit => IO.pure(5)}
+      action = {(_: Unit) => IO.pure(5)}
       _ <- cache.insert((), 1)
       now <- cache.lookupOrLoad((), action)
     } yield {
@@ -50,7 +50,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
   test("DispatchOneCache should insert overrides background action for first action") {
     for {
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-      action = {_: Unit => Temporal[IO].sleep(5.seconds).as(5)}
+      action = {(_: Unit) => Temporal[IO].sleep(5.seconds).as(5)}
       first <- cache.lookupOrLoad((), action).start
       _ <- cache.insert((), 1)
       value <- first.join
@@ -62,7 +62,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
   test("DispatchOneCache should insert overrides background action for secondary action") {
     for {
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-      action = {_: Unit => Temporal[IO].sleep(5.seconds).as(5)}
+      action = {(_: Unit) => Temporal[IO].sleep(5.seconds).as(5)}
       first <- cache.lookupOrLoad((),action).start
       second <- cache.lookupOrLoad((), action).start
       _ <- cache.insert((), 1)
@@ -77,7 +77,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
   test("DispatchOneCache should insert overrides set value") {
     for {
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-      action = {_: Unit => IO.pure(2)}
+      action = {(_: Unit) => IO.pure(2)}
       first <- cache.lookupOrLoad((), action)
       _ <- cache.insert((), 1)
       second <- cache.lookupOrLoad((), action)
