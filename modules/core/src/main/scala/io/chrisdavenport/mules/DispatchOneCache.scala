@@ -69,10 +69,10 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
       case s@Some(cacheItem) =>
         (s, updateIfFailedThenCreate(k, cacheItem))
     }.flatMap{ maybeDeferred =>
-        maybeDeferred.bracketCase(_.traverse{ deferred =>
+        maybeDeferred.bracketCase(_.flatTraverse{ deferred =>
           action(k).attempt.flatMap(e => deferred.complete(e).attempt map {
-            case Left(err) => Either.left[Throwable, V](err)
-            case Right(_) => e
+            case Left(_) => Option.empty // Either.left[Throwable, V](err) //only happened if complete action fails
+            case Right(_) => Option(e)
           })
         }){
           case (Some(deferred), ExitCase.Canceled) => deferred.complete(CancelationDuringDispatchOneCacheInsertProcessing.asLeft).attempt.void
@@ -110,7 +110,10 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
       .flatMap {
         case Some(res) => res match {
           case Right(v) => v.pure[F]
-          case Left(err) => F.raiseError(err)
+          case Left(err) => err match {
+            case CancelationDuringDispatchOneCacheInsertProcessing => lookupOrLoad(k,action)
+            case _ => F.raiseError(err)
+          }
         }
         case _ => lookupOrLoad(k,action) //cache miss case?
       }
