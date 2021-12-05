@@ -7,7 +7,7 @@ val catsEffectV = "3.2.2"
 val catsCollectionV = "0.9.3"
 
 val munitV = "0.7.25"
-val munitCEV = "1.0.5"
+val munitCEV = "1.0.7"
 
 lazy val mules = project.in(file("."))
   .disablePlugins(MimaPlugin)
