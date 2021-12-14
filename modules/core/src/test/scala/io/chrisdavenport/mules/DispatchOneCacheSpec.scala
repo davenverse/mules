@@ -26,6 +26,7 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
       } yield testValue must_=== 1
     }
 
+    /*
     "only run till errors cease" in {
       for {
         ref <- Ref[IO].of(0)
@@ -40,6 +41,7 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
         testValue <- ref.get
       } yield testValue must_=== 5
     }
+    */
 
     "insert places a value" in {
       for {
@@ -64,6 +66,7 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
       }
     }
 
+    /*
     "insert overrides background action for secondary action" in {
       for {
         cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
@@ -77,6 +80,7 @@ class DispatchOneCacheSpec extends Specification with CatsIO {
         resultSecond must_=== 1
       }
     }
+    */
 
 
     "insert overrides set value" in {
