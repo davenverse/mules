@@ -1,4 +1,4 @@
-ThisBuild / crossScalaVersions := Seq("2.12.13", "2.13.6", "3.1.0")
+ThisBuild / crossScalaVersions := Seq("2.12.15", "2.13.7", "3.1.0")
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
@@ -40,7 +40,7 @@ lazy val caffeine = project.in(file("modules/caffeine"))
   .settings(
     name := "mules-caffeine",
     libraryDependencies ++= Seq(
-      "com.github.ben-manes.caffeine" % "caffeine" % "2.9.2"
+      "com.github.ben-manes.caffeine" % "caffeine" % "2.9.3"
     ),
   ).settings(testDeps)
 
