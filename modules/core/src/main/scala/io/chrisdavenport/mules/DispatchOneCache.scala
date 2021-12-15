@@ -45,15 +45,18 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
         emptyFV
     }
 
-  private def insertAtomic(k: K, action: K => F[V]): F[Unit] = {
+  private def insertAtomic(k: K, action: K => F[V]): F[Option[Either[Throwable, V]]] = {
     mapRef(k).modify{
       case None =>
         (None, createEmptyIfUnset(k))
       case s@Some(cacheItem) =>
         (s, updateIfFailedThenCreate(k, cacheItem))
     }.flatMap{ maybeDeferred =>
-        maybeDeferred.bracketCase(_.traverse_{ deferred =>
-          action(k).attempt.flatMap(e => deferred.complete(e).attempt.void)
+        maybeDeferred.bracketCase(_.flatTraverse{ deferred =>
+          action(k).attempt.flatMap(e => deferred.complete(e).attempt map {
+            case Left(_) => Option.empty // Either.left[Throwable, V](err) //only happened if complete action fails
+            case Right(_) => Option(e)
+          })
         }){
           case (Some(deferred), Outcome.Canceled()) => deferred.complete(CancelationDuringDispatchOneCacheInsertProcessing.asLeft).attempt.void
           case (Some(deferred), Outcome.Errored(e)) => deferred.complete(e.asLeft).attempt.void
@@ -82,10 +85,20 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
       }
       .flatMap{
         case Some(s) => s.item.get.flatMap{
-          case Left(_) => insertAtomic(k, action) >> lookupOrLoad(k, action)
-          case Right(v) => F.pure(v)
+          case Left(_) => insertAtomic(k, action)
+          case Right(v) => F.pure(Option(Either.right[Throwable,V](v)))
         }
-        case None => insertAtomic(k, action) >> lookupOrLoad(k, action)
+        case None => insertAtomic(k, action)
+      }
+      .flatMap {
+        case Some(res) => res match {
+          case Right(v) => v.pure[F]
+          case Left(err) => err match {
+            case CancelationDuringDispatchOneCacheInsertProcessing => lookupOrLoad(k,action)
+            case _ => F.raiseError(err)
+          }
+        }
+        case _ => lookupOrLoad(k,action) //cache miss case?
       }
   }
 
