@@ -3,7 +3,7 @@ ThisBuild / crossScalaVersions := Seq("2.12.13", "2.13.6", "3.0.2")
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
 val catsV = "2.7.0"
-val catsEffectV = "3.2.2"
+val catsEffectV = "3.2.9"
 val catsCollectionV = "0.9.3"
 
 val munitV = "0.7.25"
