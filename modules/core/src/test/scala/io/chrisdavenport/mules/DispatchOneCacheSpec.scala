@@ -49,6 +49,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
     }
   }
 
+  /*
   test("DispatchOneCache should insert overrides background action for first action") {
     for {
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
@@ -60,6 +61,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
       assertEquals(value, Outcome.Succeeded[IO,Throwable,Int](1.pure[IO]))
     }
   }
+  */
 
 
     /*
