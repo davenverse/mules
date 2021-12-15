@@ -28,7 +28,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq(
       "org.typelevel"               %%% "cats-core"                  % catsV,
       "org.typelevel"               %%% "cats-effect"                % catsEffectV,
-      "io.chrisdavenport"           %%% "mapref"                     % "0.2.0",
+      "io.chrisdavenport"           %%% "mapref"                     % "0.2.1",
     ),
   ).settings(testDeps)
   .jsSettings(
