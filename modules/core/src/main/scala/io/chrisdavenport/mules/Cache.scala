@@ -64,12 +64,12 @@ trait Insert[F[_], K, V]{
 
 object Insert {
 
-  def contramapValues[F[_]: Functor, K, A, B](i: Insert[F, K, A])(g: B => A): Insert[F, K, B] =
+  def contramapValues[F[_], K, A, B](i: Insert[F, K, A])(g: B => A): Insert[F, K, B] =
     new Insert[F, K, B]{
       def insert(k: K, v: B): F[Unit] = i.insert(k, g(v))
     }
 
-  def contramapKeys[F[_]: Functor, A, B, V](i: Insert[F, A, V])(g: B => A): Insert[F, B, V] = 
+  def contramapKeys[F[_], A, B, V](i: Insert[F, A, V])(g: B => A): Insert[F, B, V] = 
     new Insert[F, B, V]{
       def insert(k: B, v: V): F[Unit] = i.insert(g(k), v)
     }
