@@ -1,4 +1,4 @@
-ThisBuild / crossScalaVersions := Seq("2.12.13", "2.13.6", "3.0.2")
+ThisBuild / crossScalaVersions := Seq("2.12.13", "2.13.6", "3.1.0")
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
