@@ -10,4 +10,9 @@ tags
 .metals
 metals.sbt
 .bsp/
+
+# gtags
+GPATH
+GRTAGS
+GTAGS
 .vscode
