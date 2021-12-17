@@ -117,7 +117,7 @@ object Cache {
       def delete(k: K2): F[Unit] = c.delete(g(k))
     }
 
-  def imapEval[F[_]: Monad, K, V1, V2](
+  def evalIMap[F[_]: Monad, K, V1, V2](
     c: Cache[F, K, V1]
   )(f: V1 => F[V2], g: V2 => V1): Cache[F, K, V2] =
     new Cache[F, K, V2] {
