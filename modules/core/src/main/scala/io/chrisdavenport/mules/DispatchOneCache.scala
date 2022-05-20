@@ -3,11 +3,12 @@ package io.chrisdavenport.mules
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
-import scala.collection.immutable.Map
 
+import scala.collection.immutable.Map
 import io.chrisdavenport.mapref.MapRef
 
 import java.util.concurrent.ConcurrentHashMap
+import scala.collection.mutable
 
 final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
   private val mapRef: MapRef[F, K, Option[DispatchOneCache.DispatchOneCacheItem[F, V]]],
@@ -17,6 +18,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
   import DispatchOneCache.DispatchOneCacheItem
   import DispatchOneCache.CancelationDuringDispatchOneCacheInsertProcessing
 
+  //Note the default will not actually purge any entries
   private val purgeExpiredEntries: Long => F[List[K]] =
     purgeExpiredEntriesOpt.getOrElse({(_: Long) => List.empty[K].pure[F]})
 
@@ -254,6 +256,7 @@ object DispatchOneCache {
         defaultExpiration
       ))
 
+  //No access to keys here, so cache entries will only be cleared on overwrite
   def ofShardedImmutableMap[F[_]: Async, K, V](
     shardCount: Int,
     defaultExpiration: Option[TimeSpec]
@@ -273,13 +276,26 @@ object DispatchOneCache {
     concurrencyLevel: Int = 16,
   ): F[DispatchOneCache[F, K, V]] = Sync[F].delay{
     val chm = new ConcurrentHashMap[K, DispatchOneCacheItem[F, V]](initialCapacity, loadFactor, concurrencyLevel)
+    val mapRef: MapRef[F, K, Option[DispatchOneCacheItem[F, V]]] = MapRef.fromConcurrentHashMap(chm)
+    val getKeys: () => F[List[K]] = () => Concurrent[F].unit.map{ _ =>
+      val k = chm.keys()
+      val builder = new mutable.ListBuffer[K]
+      if (k != null){
+        while (k.hasMoreElements()){
+          val next = k.nextElement()
+          builder.+=(next)
+        }
+      }
+      builder.result()
+    }
     new DispatchOneCache[F, K, V](
-      MapRef.fromConcurrentHashMap(chm),
-      None,
+      mapRef,
+      Some(KeyedMapRef.purgeExpiredEntries(mapRef,getKeys)),
       defaultExpiration
     )
   }
 
+  //No access to keys here, so cache entries will only be cleared on overwrite
   def ofMapRef[F[_]: Concurrent: Clock, K, V](
     mr: MapRef[F, K, Option[DispatchOneCacheItem[F, V]]],
     defaultExpiration: Option[TimeSpec]
@@ -307,6 +323,25 @@ object DispatchOneCache {
           val finalMap = m -- remove
           (finalMap, remove)
         }
+      )
+    }
+  }
+
+  private object KeyedMapRef {
+
+    def purgeExpiredEntries[F[_]: Async, K, V](mapRef:MapRef[F, K, Option[DispatchOneCacheItem[F, V]]], getKeys:() => F[List[K]])(now: Long): F[List[K]] = {
+      val keys: F[List[K]] = getKeys()
+      keys.flatMap(l =>
+        l.flatTraverse(k =>
+          mapRef(k).modify(optItem =>
+            optItem.map(item =>
+              if (DispatchOneCache.isExpired(now, item))
+                (None, List(k))
+              else
+                (optItem, List.empty)
+            ).getOrElse((optItem, List.empty))
+          )
+        )
       )
     }
   }
