@@ -2,10 +2,12 @@ package io.chrisdavenport.mules
 
 import cats.effect._
 import cats.effect.implicits._
+import cats.effect.kernel.Concurrent
 import cats.implicits._
 
 import scala.collection.immutable.Map
 import io.chrisdavenport.mapref.MapRef
+import io.chrisdavenport.mapref.MapRef.fromSeqRefs
 
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable
@@ -256,18 +258,25 @@ object DispatchOneCache {
         defaultExpiration
       ))
 
-  //No access to keys here, so cache entries will only be cleared on overwrite
+  //We can't key the keys from the mapref construction, so we have to repeat the construction hereto retain access to the underlying data
   def ofShardedImmutableMap[F[_]: Async, K, V](
     shardCount: Int,
     defaultExpiration: Option[TimeSpec]
-  ): F[DispatchOneCache[F, K, V]] =
-    MapRef.ofShardedImmutableMap[F, K, DispatchOneCacheItem[F, V]](shardCount).map{
+  ): F[DispatchOneCache[F, K, V]] = {
+     assert(shardCount >= 1, "MapRef.sharded should have at least 1 shard")
+    val shards: F[List[Ref[F, Map[K, DispatchOneCacheItem[F, V]]]]] =   List.fill(shardCount)(())
+      .traverse(_ => Concurrent[F].ref[Map[K, DispatchOneCacheItem[F, V]]](Map.empty))
+
+    def purgeExpiredEntries(shards:List[Ref[F, Map[K, DispatchOneCacheItem[F, V]]]])(now: Long) = shards.parFlatTraverse(SingleRef.purgeExpiredEntries(_)(now))
+
+    shards.map{ s =>
       new DispatchOneCache[F, K, V](
-        _,
-        None,
+        fromSeqRefs(s),
+        Some(purgeExpiredEntries(s)),
         defaultExpiration,
       )
     }
+  }
 
   def ofConcurrentHashMap[F[_]: Async, K, V](
     defaultExpiration: Option[TimeSpec],
@@ -307,7 +316,7 @@ object DispatchOneCache {
       )
   }
 
-  //TODO:  these 2 are also used in the MemoryCache, so should expose instead of copy/paste
+
   private object SingleRef {
 
     def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, DispatchOneCacheItem[F, V]]])(now: Long): F[List[K]] = {
