@@ -290,19 +290,20 @@ object DispatchOneCache {
     }
 
 
-  //No access to keys here, so cache entries will only be cleared on overwrite
+  //No access to keys here by default, so cache entries will only be cleared on overwrite
   def ofMapRef[F[_]: Concurrent: Clock, K, V](
     mr: MapRef[F, K, Option[DispatchOneCacheItem[F, V]]],
-    defaultExpiration: Option[TimeSpec]
+    defaultExpiration: Option[TimeSpec],
+    purgeExpiredEntries: Option[Long => F[List[K]]] = None
   ): DispatchOneCache[F, K, V] = {
     new DispatchOneCache[F, K, V](
         mr,
-        None,
+        purgeExpiredEntries,
         defaultExpiration
       )
   }
 
-  private def isExpired[F[_], A](checkAgainst: Long, cacheItem: DispatchOneCacheItem[F, A]): Boolean = {
+  private[mules] def isExpired[F[_], A](checkAgainst: Long, cacheItem: DispatchOneCacheItem[F, A]): Boolean = {
     cacheItem.itemExpiration match{
       case Some(e) if e.nanos < checkAgainst => true
       case _ => false

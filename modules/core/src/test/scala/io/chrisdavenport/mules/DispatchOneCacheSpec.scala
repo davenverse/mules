@@ -92,4 +92,44 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
       assertEquals(second, 1)
     }
   }
+  // No way to directly test the actual cache constructors, so we copy the construction and test that.
+  test("DispatchOneCache.ofConcurrentHashMap should expire keys") {
+    Resource.eval(PurgeableMapRef.ofConcurrentHashMap[IO, Unit, DispatchOneCache.DispatchOneCacheItem[IO, Int]](isExpired = DispatchOneCache.isExpired[IO,Int]))
+      .fproduct(pmr =>DispatchOneCache.ofMapRef[IO,Unit, Int](pmr.mapRef,TimeSpec.fromDuration(500.millis), pmr.purgeExpiredEntries.some))
+      .flatMap{ case (pmr,cache) => DispatchOneCache.liftToAuto[IO, Unit, Int](
+        cache,
+        TimeSpec.unsafeFromDuration(200.millis)
+      ).as((pmr, cache))}
+      .use {case (pmr, cache) => for {
+        _ <- cache.insert((), 1)
+        _ <- IO.sleep(300.millis)
+        first <- cache.lookup(())
+        _ <- IO.sleep(500.millis)
+        cacheItem <- pmr.mapRef(()).get
+        second <- cacheItem.traverse(_.item.get)
+      } yield {
+        assert(first.contains(1))
+        assertEquals(second, None)
+      }}
+  }
+
+  test("DispatchOneCache.ofShardedImmutableMap should expire keys") {
+    Resource.eval(PurgeableMapRef.ofShardedImmutableMap[IO, Unit, DispatchOneCache.DispatchOneCacheItem[IO, Int]](4, DispatchOneCache.isExpired[IO,Int]))
+      .fproduct(pmr =>DispatchOneCache.ofMapRef[IO,Unit, Int](pmr.mapRef,TimeSpec.fromDuration(500.millis), pmr.purgeExpiredEntries.some))
+      .flatMap{ case (pmr,cache) => DispatchOneCache.liftToAuto[IO, Unit, Int](
+        cache,
+        TimeSpec.unsafeFromDuration(200.millis)
+      ).as((pmr, cache))}
+      .use {case (pmr, cache) => for {
+        _ <- cache.insert((), 1)
+        _ <- IO.sleep(300.millis)
+        first <- cache.lookup(())
+        _ <- IO.sleep(500.millis)
+        cacheItem <- pmr.mapRef(()).get
+        second <- cacheItem.traverse(_.item.get)
+      } yield {
+        assert(first.contains(1))
+        assertEquals(second, None)
+      }}
+  }
 }
