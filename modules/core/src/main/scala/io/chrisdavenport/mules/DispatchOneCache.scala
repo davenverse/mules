@@ -344,7 +344,7 @@ object DispatchOneCache {
         l.flatTraverse(k =>
           mapRef(k).modify(optItem =>
             optItem.map(item =>
-              if (DispatchOneCache.isExpired(now, item))
+              if (isExpired(now, item))
                 (None, List(k))
               else
                 (optItem, List.empty)
