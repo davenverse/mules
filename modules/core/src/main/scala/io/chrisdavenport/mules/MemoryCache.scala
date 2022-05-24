@@ -307,10 +307,10 @@ object MemoryCache {
     shardCount: Int,
     defaultExpiration: Option[TimeSpec]
   ): F[MemoryCache[F, K, V]] =
-    MapRef.ofShardedImmutableMap[F, K, MemoryCacheItem[V]](shardCount).map{
+    PurgeableMapRef.ofShardedImmutableMap[F, K, MemoryCacheItem[V]](shardCount, isExpired).map{ smr =>
       new MemoryCache[F, K, V](
-        _,
-        None,
+        smr.mapRef,
+        Some(smr.purgeExpiredEntries),
         defaultExpiration,
         {(_, _) => Concurrent[F].unit},
         {(_, _) => Concurrent[F].unit},
@@ -324,17 +324,21 @@ object MemoryCache {
     initialCapacity: Int = 16,
     loadFactor: Float = 0.75f,
     concurrencyLevel: Int = 16,
-  ): F[MemoryCache[F, K, V]] = Concurrent[F].unit.map{_ =>
-    val chm = new ConcurrentHashMap[K, MemoryCacheItem[V]](initialCapacity, loadFactor, concurrencyLevel)
-    new MemoryCache[F, K, V](
-      MapRef.fromConcurrentHashMap(chm),
-      None,
-      defaultExpiration,
-      {(_, _) => Applicative[F].unit},
-      {(_, _) => Applicative[F].unit},
-      {(_: K) => Applicative[F].unit},
-      {(_: K) => Applicative[F].unit}
-    )
+  ): F[MemoryCache[F, K, V]] =
+    PurgeableMapRef.ofConcurrentHashMap[F,K, MemoryCacheItem[V]](
+      initialCapacity,
+      loadFactor,
+      concurrencyLevel,
+      isExpired).map {pmr =>
+      new MemoryCache[F, K, V](
+          pmr.mapRef,
+          Some(pmr.purgeExpiredEntries),
+          defaultExpiration,
+          {(_, _) => Applicative[F].unit},
+          {(_, _) => Applicative[F].unit},
+          {(_: K) => Applicative[F].unit},
+          {(_: K) => Applicative[F].unit}
+        )
   }
 
   def ofMapRef[F[_]: Temporal, K, V](
