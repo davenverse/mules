@@ -310,7 +310,6 @@ object DispatchOneCache {
   }
 }
 
-case class PurgeableMapRef[F[_],K,V](mapRef: MapRef[F,K,V], purgeExpiredEntries: Long => F[List[K]])
 object SingleRef {
   def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, V]], isExpired: (Long, V) => Boolean)(now: Long): F[List[K]] = {
     ref.modify(
@@ -329,6 +328,8 @@ object SingleRef {
   }
 }
 
+case class PurgeableMapRef[F[_],K,V](mapRef: MapRef[F,K,V], purgeExpiredEntries: Long => F[List[K]])
+
 object PurgeableMapRef {
   def ofShardedImmutableMap[F[_]: Concurrent, K, V](
     shardCount: Int,
@@ -339,6 +340,7 @@ object PurgeableMapRef {
       .traverse(_ => Concurrent[F].ref[Map[K, V]](Map.empty))
 
     def purgeExpiredEntries(shards:List[Ref[F, Map[K, V]]])(now: Long) = shards.parFlatTraverse(SingleRef.purgeExpiredEntries(_, isExpired)(now))
+
     shards.map{ s =>
       PurgeableMapRef(
         fromSeqRefs(s),

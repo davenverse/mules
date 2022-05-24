@@ -9,8 +9,6 @@ import scala.collection.immutable.Map
 import io.chrisdavenport.mapref.MapRef
 import io.chrisdavenport.mapref.implicits._
 
-import java.util.concurrent.ConcurrentHashMap
-
 final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private val mapRef: MapRef[F, K, Option[MemoryCache.MemoryCacheItem[V]]],
   private val purgeExpiredEntriesOpt : Option[Long => F[List[K]]], // Optional Performance Improvement over Default
@@ -295,7 +293,7 @@ object MemoryCache {
     Ref.of[F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
       .map(ref => new MemoryCache[F, K, V](
         MapRef.fromSingleImmutableMapRef(ref),
-        {(l: Long) => SingleRef.purgeExpiredEntries(ref)(l)}.some,
+        {(l: Long) => SingleRef.purgeExpiredEntries[F,K, MemoryCacheItem[V]](ref, isExpired)(l)}.some,
         defaultExpiration,
         {(_, _) => Concurrent[F].unit},
         {(_, _) =>  Concurrent[F].unit},
@@ -354,26 +352,6 @@ object MemoryCache {
         {(_: K) => Applicative[F].unit},
         {(_: K) => Applicative[F].unit}
       )
-  }
-
-
-  private object SingleRef {
-
-    def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, MemoryCacheItem[V]]])(now: Long): F[List[K]] = {
-      ref.modify(
-        m => {
-          val l = scala.collection.mutable.ListBuffer.empty[K]
-          m.foreach{ case (k, item) =>
-            if (isExpired(now, item)) {
-              l.+=(k)
-            }
-          }
-          val remove = l.result()
-          val finalMap = m -- remove
-          (finalMap, remove)
-        }
-      )
-    }
   }
 
   private def isExpired[A](checkAgainst: Long, cacheItem: MemoryCacheItem[A]): Boolean = {
