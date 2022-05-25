@@ -290,11 +290,22 @@ object DispatchOneCache {
     }
 
 
-  //No access to keys here by default, so cache entries will only be cleared on overwrite
+  //No access to keys here by default, so cache entries will only be cleared on overwrite.
+  // kept separate from method below for bincompat
+  def ofMapRef[F[_]: Concurrent: Clock, K, V](
+     mr: MapRef[F, K, Option[DispatchOneCacheItem[F, V]]],
+     defaultExpiration: Option[TimeSpec]
+   ): DispatchOneCache[F, K, V] = {
+    new DispatchOneCache[F, K, V](
+      mr,
+      None,
+      defaultExpiration
+    )
+  }
   def ofMapRef[F[_]: Concurrent: Clock, K, V](
     mr: MapRef[F, K, Option[DispatchOneCacheItem[F, V]]],
     defaultExpiration: Option[TimeSpec],
-    purgeExpiredEntries: Option[Long => F[List[K]]] = None
+    purgeExpiredEntries: Option[Long => F[List[K]]]
   ): DispatchOneCache[F, K, V] = {
     new DispatchOneCache[F, K, V](
         mr,
@@ -311,7 +322,7 @@ object DispatchOneCache {
   }
 }
 
-object SingleRef {
+private[mules] object SingleRef {
   def purgeExpiredEntries[F[_], K, V](ref: Ref[F, Map[K, V]], isExpired: (Long, V) => Boolean)(now: Long): F[List[K]] = {
     ref.modify(
       m => {
@@ -329,9 +340,9 @@ object SingleRef {
   }
 }
 
-case class PurgeableMapRef[F[_],K,V](mapRef: MapRef[F,K,V], purgeExpiredEntries: Long => F[List[K]])
+private[mules] case class PurgeableMapRef[F[_],K,V](mapRef: MapRef[F,K,V], purgeExpiredEntries: Long => F[List[K]])
 
-object PurgeableMapRef {
+private[mules] object PurgeableMapRef {
   def ofShardedImmutableMap[F[_]: Concurrent, K, V](
     shardCount: Int,
     isExpired: (Long, V) => Boolean
