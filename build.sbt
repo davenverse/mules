@@ -2,6 +2,8 @@ ThisBuild / crossScalaVersions := Seq("2.12.15", "2.13.8", "3.1.2")
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
+ThisBuild / versionScheme := Some("early-semver")
+
 val catsV = "2.7.0"
 val catsEffectV = "3.3.12"
 val catsCollectionV = "0.9.3"
