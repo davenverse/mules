@@ -15,7 +15,7 @@ ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 ThisBuild / versionScheme := Some("early-semver")
 
 
-val catsV = "2.7.0"
+val catsV = "2.8.0"
 val catsEffectV = "3.3.13"
 val catsCollectionV = "0.9.3"
 
