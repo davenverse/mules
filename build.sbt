@@ -1,8 +1,19 @@
+ThisBuild / tlBaseVersion := "0.5"
+ThisBuild / organization := "io.chrisdavenport"
+ThisBuild / organizationName := "Christopher Davenport"
+ThisBuild / licenses := Seq(License.MIT)
+ThisBuild / developers := List(
+  tlGitHubDev("christopherdavenport", "Christopher Davenport")
+)
+ThisBuild / tlCiReleaseBranches := Seq("main")
+ThisBuild / tlSonatypeUseLegacyHost := true
+
 ThisBuild / crossScalaVersions := Seq("2.12.15", "2.13.8", "3.1.2")
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
 ThisBuild / versionScheme := Some("early-semver")
+
 
 val catsV = "2.7.0"
 val catsEffectV = "3.3.13"
@@ -12,8 +23,6 @@ val munitV = "0.7.25"
 val munitCEV = "1.0.7"
 
 lazy val mules = tlCrossRootProject
-  .disablePlugins(MimaPlugin)
-  .enablePlugins(NoPublishPlugin)
   .aggregate(core, caffeine, reload, noop, bench)
 
 lazy val bench = project.in(file("modules/bench"))
