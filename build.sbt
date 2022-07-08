@@ -5,16 +5,16 @@ ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 ThisBuild / versionScheme := Some("early-semver")
 
 val catsV = "2.7.0"
-val catsEffectV = "3.3.12"
+val catsEffectV = "3.3.13"
 val catsCollectionV = "0.9.3"
 
 val munitV = "0.7.25"
 val munitCEV = "1.0.7"
 
-lazy val mules = project.in(file("."))
+lazy val mules = tlCrossRootProject
   .disablePlugins(MimaPlugin)
   .enablePlugins(NoPublishPlugin)
-  .aggregate(core.jvm, core.js, caffeine, reload.jvm, reload.js, noop.jvm, noop.js, bench)
+  .aggregate(core, caffeine, reload, noop, bench)
 
 lazy val bench = project.in(file("modules/bench"))
   .enablePlugins(JmhPlugin)
