@@ -281,6 +281,27 @@ object MemoryCache {
   }
 
   /**
+    * Cache construction is Synchronous
+    * 
+    * Otherwise a copy paste of {@link #ofSingleImmutableMap() ofSingleImmutableMap}
+    * 
+    **/
+  def ofSingleImmutableMap2[G[_] : Sync, F[_]: Async, K, V](
+    defaultExpiration: Option[TimeSpec]
+  ): G[MemoryCache[F, K, V]] = 
+    Ref.in[G, F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
+    .map(ref => new MemoryCache[F, K, V](
+        MapRef.fromSingleImmutableMapRef(ref),
+        {(l: Long) => SingleRef.purgeExpiredEntries[F,K, MemoryCacheItem[V]](ref, isExpired)(l)}.some,
+        defaultExpiration,
+        {(_, _) => Concurrent[F].unit},
+        {(_, _) =>  Concurrent[F].unit},
+        {(_: K) =>  Concurrent[F].unit},
+        {(_: K) =>  Concurrent[F].unit}
+    ))
+  
+
+  /**
     * Create a new cache with a default expiration value for newly added cache items.
     *
     * Items that are added to the cache without an explicit expiration value (using insert) will be inserted with the default expiration value.
