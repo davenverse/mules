@@ -286,7 +286,7 @@ object MemoryCache {
     * Otherwise a copy paste of {@link #ofSingleImmutableMap() ofSingleImmutableMap}
     * 
     **/
-  def ofSingleImmutableMap2[G[_] : Sync, F[_]: Async, K, V](
+  def inSingleImmutableMap[G[_] : Sync, F[_]: Async, K, V](
     defaultExpiration: Option[TimeSpec]
   ): G[MemoryCache[F, K, V]] = 
     Ref.in[G, F, Map[K, MemoryCacheItem[V]]](Map.empty[K, MemoryCacheItem[V]])
