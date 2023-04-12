@@ -9,6 +9,7 @@ ThisBuild / tlCiReleaseBranches := Seq("main")
 ThisBuild / tlSonatypeUseLegacyHost := true
 
 ThisBuild / crossScalaVersions := Seq("2.12.15", "2.13.8", "3.2.2")
+ThisBuild / scalaVersion := "3.2.2"
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
@@ -53,7 +54,7 @@ lazy val caffeine = project.in(file("modules/caffeine"))
   .settings(
     name := "mules-caffeine",
     libraryDependencies ++= Seq(
-      "com.github.ben-manes.caffeine" % "caffeine" % "2.9.3"
+      "com.github.ben-manes.caffeine" % "caffeine" % "3.1.6"
     ),
   ).settings(testDeps)
 
