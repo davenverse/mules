@@ -5,8 +5,8 @@ import cats.effect.implicits._
 import cats.implicits._
 
 import scala.collection.immutable.Map
-import io.chrisdavenport.mapref.MapRef
-import io.chrisdavenport.mapref.MapRef.fromSeqRefs
+import cats.effect.std.MapRef
+import cats.effect.std.MapRef.fromSeqRefs
 
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable
@@ -361,7 +361,7 @@ private[mules] object PurgeableMapRef {
     }
   }
 
-  def ofConcurrentHashMap[F[_]: Concurrent, K, V](
+  def ofConcurrentHashMap[F[_]: Async, K, V](
     initialCapacity: Int = 16,
     loadFactor: Float = 0.75f,
     concurrencyLevel: Int = 16,
