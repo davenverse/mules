@@ -69,7 +69,7 @@ lazy val noop = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule)},
   )
 
-lazy val reload = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+lazy val reload = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
   .in(file("modules/reload"))
   .dependsOn(core)
