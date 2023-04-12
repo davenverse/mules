@@ -6,8 +6,8 @@ import cats.effect.syntax.all._
 import cats.syntax.all._
 import scala.collection.immutable.Map
 
-import io.chrisdavenport.mapref.MapRef
-import io.chrisdavenport.mapref.implicits._
+import cats.effect.std.MapRef
+import cats.effect.std.syntax.all._
 
 final class MemoryCache[F[_], K, V] private[MemoryCache] (
   private val mapRef: MapRef[F, K, Option[MemoryCache.MemoryCacheItem[V]]],
@@ -338,7 +338,7 @@ object MemoryCache {
       )
     }
 
-  def ofConcurrentHashMap[F[_]: Temporal, K, V](
+  def ofConcurrentHashMap[F[_]: Async, K, V](
     defaultExpiration: Option[TimeSpec],
     initialCapacity: Int = 16,
     loadFactor: Float = 0.75f,

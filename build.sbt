@@ -1,4 +1,4 @@
-ThisBuild / tlBaseVersion := "0.6"
+ThisBuild / tlBaseVersion := "0.7"
 ThisBuild / organization := "io.chrisdavenport"
 ThisBuild / organizationName := "Christopher Davenport"
 ThisBuild / licenses := Seq(License.MIT)
@@ -8,19 +8,21 @@ ThisBuild / developers := List(
 ThisBuild / tlCiReleaseBranches := Seq("main")
 ThisBuild / tlSonatypeUseLegacyHost := true
 
-ThisBuild / crossScalaVersions := Seq("2.12.15", "2.13.8", "3.1.2")
+ThisBuild / crossScalaVersions := Seq("2.12.15", "2.13.8", "3.2.2")
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
 ThisBuild / versionScheme := Some("early-semver")
 
+ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
-val catsV = "2.8.0"
-val catsEffectV = "3.3.13"
-val catsCollectionV = "0.9.3"
 
-val munitV = "0.7.25"
-val munitCEV = "1.0.7"
+val catsV = "2.9.0"
+val catsEffectV = "3.4.8"
+val catsCollectionV = "0.9.6"
+
+val munitV = "1.0.0-M7"
+val munitCEV = "2.0.0-M3"
 
 lazy val mules = tlCrossRootProject
   .aggregate(core, caffeine, reload, noop, bench)
@@ -31,7 +33,7 @@ lazy val bench = project.in(file("modules/bench"))
   .enablePlugins(NoPublishPlugin)
   .dependsOn(core.jvm, caffeine)
 
-lazy val core = crossProject(JSPlatform, JVMPlatform)
+lazy val core = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("modules/core"))
   .settings(
@@ -39,8 +41,8 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq(
       "org.typelevel"               %%% "cats-core"                  % catsV,
       "org.typelevel"               %%% "cats-effect"                % catsEffectV,
-      "io.chrisdavenport"           %%% "mapref"                     % "0.2.1",
     ),
+    tlJdkRelease := Some(8)
   ).settings(testDeps)
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule)},
@@ -55,18 +57,19 @@ lazy val caffeine = project.in(file("modules/caffeine"))
     ),
   ).settings(testDeps)
 
-lazy val noop = crossProject(JSPlatform, JVMPlatform)
+lazy val noop = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("modules/noop"))
   .dependsOn(core)
   .settings(
-    name := "mules-noop"
+    name := "mules-noop",
+    tlJdkRelease := Some(8)
   ).settings(testDeps)
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule)},
   )
 
-lazy val reload = crossProject(JSPlatform, JVMPlatform)
+lazy val reload = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("modules/reload"))
   .dependsOn(core)
@@ -75,6 +78,7 @@ lazy val reload = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq(
       "org.typelevel"               %%% "cats-collections-core"      % catsCollectionV
     ),
+    tlJdkRelease := Some(8),
   ).settings(testDeps)
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule)},
@@ -85,6 +89,6 @@ lazy val testDeps = Seq(
     "org.typelevel" %%% "cats-effect-laws" % catsEffectV % Test,
     "org.scalameta" %%% "munit" % munitV % Test,
     "org.scalameta" %%% "munit-scalacheck" % munitV % Test,
-    "org.typelevel" %%% "munit-cats-effect-3" % munitCEV % Test,
+    "org.typelevel" %%% "munit-cats-effect" % munitCEV % Test,
   )
 )
