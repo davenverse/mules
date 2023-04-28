@@ -8,7 +8,7 @@ ThisBuild / developers := List(
 ThisBuild / tlCiReleaseBranches := Seq("main")
 ThisBuild / tlSonatypeUseLegacyHost := true
 
-ThisBuild / crossScalaVersions := Seq("2.12.15", "2.13.8", "3.2.2")
+ThisBuild / crossScalaVersions := Seq("2.12.17", "2.13.8", "3.2.2")
 ThisBuild / scalaVersion := "3.2.2"
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
@@ -19,7 +19,7 @@ ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
 
 val catsV = "2.9.0"
-val catsEffectV = "3.4.8"
+val catsEffectV = "3.4.9"
 val catsCollectionV = "0.9.6"
 
 val munitV = "1.0.0-M7"
