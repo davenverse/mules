@@ -8,8 +8,8 @@ ThisBuild / developers := List(
 ThisBuild / tlCiReleaseBranches := Seq("main")
 ThisBuild / tlSonatypeUseLegacyHost := true
 
-ThisBuild / crossScalaVersions := Seq("2.12.17", "2.13.8", "3.2.2")
-ThisBuild / scalaVersion := "3.2.2"
+ThisBuild / crossScalaVersions := Seq("2.12.17", "2.13.8", "3.3.1")
+ThisBuild / scalaVersion := "3.3.1"
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
