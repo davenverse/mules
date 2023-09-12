@@ -20,7 +20,7 @@ ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
 val catsV = "2.9.0"
 val catsEffectV = "3.4.9"
-val catsCollectionV = "0.9.6"
+val catsCollectionV = "0.9.8"
 
 val munitV = "1.0.0-M7"
 val munitCEV = "2.0.0-M3"
