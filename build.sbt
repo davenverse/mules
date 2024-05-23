@@ -23,7 +23,7 @@ val catsEffectV = "3.4.9"
 val catsCollectionV = "0.9.6"
 
 val munitV = "1.0.0-M7"
-val munitCEV = "2.0.0-M3"
+val munitCEV = "2.0.0"
 
 lazy val mules = tlCrossRootProject
   .aggregate(core, caffeine, reload, noop, bench)
