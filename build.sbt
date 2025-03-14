@@ -6,10 +6,10 @@ ThisBuild / developers := List(
   tlGitHubDev("christopherdavenport", "Christopher Davenport")
 )
 ThisBuild / tlCiReleaseBranches := Seq("main")
-ThisBuild / tlSonatypeUseLegacyHost := true
+ThisBuild / sonatypeCredentialHost := xerial.sbt.Sonatype.sonatypeLegacy
 
-ThisBuild / crossScalaVersions := Seq("2.12.17", "2.13.8", "3.2.2")
-ThisBuild / scalaVersion := "3.2.2"
+ThisBuild / crossScalaVersions := Seq("2.12.17", "2.13.8", "3.3.0")
+ThisBuild / scalaVersion := "3.3.0"
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
