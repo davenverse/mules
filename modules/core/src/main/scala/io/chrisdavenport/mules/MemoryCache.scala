@@ -319,7 +319,7 @@ object MemoryCache {
   /**
    * Cache construction is Synchronous
    *
-   * Otherwise a copy paste of {@link #ofSingleImmutableMap() ofSingleImmutableMap}
+   * Otherwise a copy paste of [[ofSingleImmutableMap]]
    */
   def inSingleImmutableMap[G[_]: Sync, F[_]: Async, K, V](
       defaultExpiration: Option[TimeSpec]
