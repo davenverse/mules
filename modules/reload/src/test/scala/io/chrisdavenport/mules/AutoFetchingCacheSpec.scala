@@ -23,7 +23,7 @@ package io.chrisdavenport.mules
 package reload
 
 import cats.effect._
-import cats.syntax.all._
+
 import munit._
 
 import scala.concurrent.duration._
