@@ -1,6 +1,7 @@
 ThisBuild / tlBaseVersion := "0.7"
 ThisBuild / organization := "io.chrisdavenport"
 ThisBuild / organizationName := "Christopher Davenport"
+ThisBuild / startYear := Some(2018)
 ThisBuild / licenses := Seq(License.MIT)
 ThisBuild / developers := List(
   tlGitHubDev("christopherdavenport", "Christopher Davenport")
