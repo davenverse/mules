@@ -28,7 +28,6 @@ import cats.syntax.all._
 import scala.collection.immutable.Map
 
 import cats.effect.std.MapRef
-import cats.effect.std.syntax.all._
 
 final class MemoryCache[F[_], K, V] private[MemoryCache] (
     private val mapRef: MapRef[F, K, Option[MemoryCache.MemoryCacheItem[V]]],
