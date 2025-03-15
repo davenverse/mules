@@ -9,8 +9,8 @@ ThisBuild / developers := List(
 ThisBuild / tlCiReleaseBranches := Seq("main")
 ThisBuild / sonatypeCredentialHost := xerial.sbt.Sonatype.sonatypeLegacy
 
-ThisBuild / crossScalaVersions := Seq("2.12.17", "2.13.11", "3.3.0")
-ThisBuild / scalaVersion := "3.3.0"
+ThisBuild / crossScalaVersions := Seq("2.12.20", "2.13.16", "3.3.4")
+ThisBuild / scalaVersion := "3.3.4"
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
