@@ -63,7 +63,7 @@ object CaffeineCache {
       .map(fromCache[F, K, V](_))
   }
 
-  /** Build a Cache from a Caffeine Cache * */
+  /** Build a Cache from a Caffeine Cache */
   def fromCache[F[_]: Sync, K, V](cache: CCache[K, V]): Cache[F, K, V] =
     new CaffeineCache[F, K, V](cache)
 
