@@ -1,3 +1,24 @@
+/*
+ * Copyright (c) 2018 Christopher Davenport
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 package io.chrisdavenport.mules
 
 import scala.concurrent.duration._
@@ -10,7 +31,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
     for {
       ref <- Ref[IO].of(0)
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-      action = {(_: Unit) => Temporal[IO].sleep(1.second) >> ref.modify(i => (i+1, i))}
+      action = { (_: Unit) => Temporal[IO].sleep(1.second) >> ref.modify(i => (i + 1, i)) }
       first <- cache.lookupOrLoad((), action).start
       second <- cache.lookupOrLoad((), action).start
       third <- cache.lookupOrLoad((), action).start
@@ -21,7 +42,7 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
     } yield assertEquals(testValue, 1)
   }
 
-    /*
+  /*
     "only run till errors cease" in {
       for {
         ref <- Ref[IO].of(0)
@@ -36,17 +57,15 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
         testValue <- ref.get
       } yield testValue must_=== 5
     }
-    */
+   */
 
   test("DispatchOneCache should insert places a value") {
     for {
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-      action = {(_: Unit) => IO.pure(5)}
+      action = { (_: Unit) => IO.pure(5) }
       _ <- cache.insert((), 1)
       now <- cache.lookupOrLoad((), action)
-    } yield {
-      assertEquals(now, 1)
-    }
+    } yield assertEquals(now, 1)
   }
 
   /*
@@ -61,10 +80,9 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
       assertEquals(value, Outcome.Succeeded[IO,Throwable,Int](1.pure[IO]))
     }
   }
-  */
+   */
 
-
-    /*
+  /*
     "insert overrides background action for secondary action" in {
       for {
         cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
@@ -78,12 +96,12 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
         resultSecond must_=== 1
       }
     }
-    */
+   */
 
   test("DispatchOneCache should insert overrides set value") {
     for {
       cache <- DispatchOneCache.ofSingleImmutableMap[IO, Unit, Int](None)
-      action = {(_: Unit) => IO.pure(2)}
+      action = { (_: Unit) => IO.pure(2) }
       first <- cache.lookupOrLoad((), action)
       _ <- cache.insert((), 1)
       second <- cache.lookupOrLoad((), action)
@@ -94,42 +112,79 @@ class DispatchOneCacheSpec extends CatsEffectSuite {
   }
   // No way to directly test the actual cache constructors, so we copy the construction and test that.
   test("DispatchOneCache.ofConcurrentHashMap should expire keys") {
-    Resource.eval(PurgeableMapRef.ofConcurrentHashMap[IO, Unit, DispatchOneCache.DispatchOneCacheItem[IO, Int]](isExpired = DispatchOneCache.isExpired[IO,Int]))
-      .fproduct(pmr =>DispatchOneCache.ofMapRef[IO,Unit, Int](pmr.mapRef,TimeSpec.fromDuration(500.millis), pmr.purgeExpiredEntries.some))
-      .flatMap{ case (pmr,cache) => DispatchOneCache.liftToAuto[IO, Unit, Int](
-        cache,
-        TimeSpec.unsafeFromDuration(200.millis)
-      ).as((pmr, cache))}
-      .use {case (pmr, cache) => for {
-        _ <- cache.insert((), 1)
-        _ <- IO.sleep(300.millis)
-        first <- cache.lookup(())
-        _ <- IO.sleep(500.millis)
-        cacheItem <- pmr.mapRef(()).get
-        second <- cacheItem.traverse(_.item.get)
-      } yield {
-        assert(first.contains(1))
-        assertEquals(second, None)
-      }}
+    Resource
+      .eval(
+        PurgeableMapRef
+          .ofConcurrentHashMap[IO, Unit, DispatchOneCache.DispatchOneCacheItem[IO, Int]](isExpired =
+            DispatchOneCache.isExpired[IO, Int]
+          )
+      )
+      .fproduct(pmr =>
+        DispatchOneCache.ofMapRef[IO, Unit, Int](
+          pmr.mapRef,
+          TimeSpec.fromDuration(500.millis),
+          pmr.purgeExpiredEntries.some
+        )
+      )
+      .flatMap { case (pmr, cache) =>
+        DispatchOneCache
+          .liftToAuto[IO, Unit, Int](
+            cache,
+            TimeSpec.unsafeFromDuration(200.millis)
+          )
+          .as((pmr, cache))
+      }
+      .use { case (pmr, cache) =>
+        for {
+          _ <- cache.insert((), 1)
+          _ <- IO.sleep(300.millis)
+          first <- cache.lookup(())
+          _ <- IO.sleep(500.millis)
+          cacheItem <- pmr.mapRef(()).get
+          second <- cacheItem.traverse(_.item.get)
+        } yield {
+          assert(first.contains(1))
+          assertEquals(second, None)
+        }
+      }
   }
 
   test("DispatchOneCache.ofShardedImmutableMap should expire keys") {
-    Resource.eval(PurgeableMapRef.ofShardedImmutableMap[IO, Unit, DispatchOneCache.DispatchOneCacheItem[IO, Int]](4, DispatchOneCache.isExpired[IO,Int]))
-      .fproduct(pmr =>DispatchOneCache.ofMapRef[IO,Unit, Int](pmr.mapRef,TimeSpec.fromDuration(500.millis), pmr.purgeExpiredEntries.some))
-      .flatMap{ case (pmr,cache) => DispatchOneCache.liftToAuto[IO, Unit, Int](
-        cache,
-        TimeSpec.unsafeFromDuration(200.millis)
-      ).as((pmr, cache))}
-      .use {case (pmr, cache) => for {
-        _ <- cache.insert((), 1)
-        _ <- IO.sleep(300.millis)
-        first <- cache.lookup(())
-        _ <- IO.sleep(500.millis)
-        cacheItem <- pmr.mapRef(()).get
-        second <- cacheItem.traverse(_.item.get)
-      } yield {
-        assert(first.contains(1))
-        assertEquals(second, None)
-      }}
+    Resource
+      .eval(
+        PurgeableMapRef
+          .ofShardedImmutableMap[IO, Unit, DispatchOneCache.DispatchOneCacheItem[IO, Int]](
+            4,
+            DispatchOneCache.isExpired[IO, Int]
+          )
+      )
+      .fproduct(pmr =>
+        DispatchOneCache.ofMapRef[IO, Unit, Int](
+          pmr.mapRef,
+          TimeSpec.fromDuration(500.millis),
+          pmr.purgeExpiredEntries.some
+        )
+      )
+      .flatMap { case (pmr, cache) =>
+        DispatchOneCache
+          .liftToAuto[IO, Unit, Int](
+            cache,
+            TimeSpec.unsafeFromDuration(200.millis)
+          )
+          .as((pmr, cache))
+      }
+      .use { case (pmr, cache) =>
+        for {
+          _ <- cache.insert((), 1)
+          _ <- IO.sleep(300.millis)
+          first <- cache.lookup(())
+          _ <- IO.sleep(500.millis)
+          cacheItem <- pmr.mapRef(()).get
+          second <- cacheItem.traverse(_.item.get)
+        } yield {
+          assert(first.contains(1))
+          assertEquals(second, None)
+        }
+      }
   }
 }

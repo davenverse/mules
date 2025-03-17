@@ -1,3 +1,24 @@
+/*
+ * Copyright (c) 2018 Christopher Davenport
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 package io.chrisdavenport.mules
 
 // import java.util.concurrent.TimeUnit
@@ -25,8 +46,10 @@ class LookUpBench {
   def contentionCaffeine(in: BenchStateCaffeine) =
     testUnderContention(in.cache, in.readList, in.writeList)(in.R)
 
-  def testUnderContention(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit R: IORuntime) = {
-    val set = w.traverse( m.insert(_, "foo"))
+  def testUnderContention(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit
+      R: IORuntime
+  ) = {
+    val set = w.traverse(m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
     val action = (set, read).parMapN((_, _) => ())
     action.unsafeRunSync()
@@ -44,12 +67,12 @@ class LookUpBench {
   def contentionReadsCaffeine(in: BenchStateCaffeine) =
     underContentionWaitReads(in.cache, in.readList, in.writeList)(in.R)
 
-  def underContentionWaitReads(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit R: IORuntime) = {
+  def underContentionWaitReads(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit
+      R: IORuntime
+  ) = {
     val set = w.traverse(m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
-    Concurrent[IO].bracket(set.start)(
-      _ => read
-    )(_.cancel).unsafeRunSync()
+    Concurrent[IO].bracket(set.start)(_ => read)(_.cancel).unsafeRunSync()
   }
 
   @Benchmark
@@ -64,12 +87,12 @@ class LookUpBench {
   def contentionWritesCaffeine(in: BenchStateCaffeine) =
     underContentionWaitWrites(in.cache, in.readList, in.writeList)(in.R)
 
-  def underContentionWaitWrites(m: Cache[IO, Int, String],r: List[Int], w: List[Int])(implicit R: IORuntime) = {
-    val set = w.traverse( m.insert(_, "foo"))
+  def underContentionWaitWrites(m: Cache[IO, Int, String], r: List[Int], w: List[Int])(implicit
+      R: IORuntime
+  ) = {
+    val set = w.traverse(m.insert(_, "foo"))
     val read = r.traverse(m.lookup(_))
-    Concurrent[IO].bracket(read.start)(
-      _ => set
-    )(_.cancel).unsafeRunSync()
+    Concurrent[IO].bracket(read.start)(_ => set)(_.cancel).unsafeRunSync()
   }
 
 }
@@ -79,20 +102,19 @@ object LookUpBench {
   class BenchStateRef {
     var memoryCache: MemoryCache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
-    val readList : List[Int] = (1 to 100).toList
+    val readList: List[Int] = (1 to 100).toList
     implicit val R: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
-    def setup(): Unit = {
+    def setup(): Unit =
       memoryCache = MemoryCache.ofSingleImmutableMap[IO, Int, String](None).unsafeRunSync()(R)
-    }
 
   }
   @State(Scope.Benchmark)
   class BenchStateCHM {
     var memoryCache: MemoryCache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
-    val readList : List[Int] = (1 to 100).toList
+    val readList: List[Int] = (1 to 100).toList
     implicit val R: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
@@ -108,7 +130,7 @@ object LookUpBench {
 
     var cache: Cache[IO, Int, String] = _
     val writeList: List[Int] = (1 to 100).toList
-    val readList : List[Int] = (1 to 100).toList
+    val readList: List[Int] = (1 to 100).toList
     implicit val R: IORuntime = IORuntime.global
 
     @Setup(Level.Trial)
