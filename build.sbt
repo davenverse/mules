@@ -18,12 +18,12 @@ ThisBuild / versionScheme := Some("early-semver")
 
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
-val catsV = "2.9.0"
-val catsEffectV = "3.4.9"
-val catsCollectionV = "0.9.6"
+val catsV = "2.11.0"
+val catsEffectV = "3.5.7"
+val catsCollectionV = "0.9.9"
 
-val munitV = "1.0.0-M7"
-val munitCEV = "2.0.0-M3"
+val munitV = "1.0.0"
+val munitCEV = "2.0.0"
 
 lazy val mules = tlCrossRootProject
   .aggregate(core, caffeine, reload, noop, bench)
@@ -95,7 +95,7 @@ lazy val testDeps = Seq(
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-effect-laws"  % catsEffectV % Test,
     "org.scalameta" %%% "munit"             % munitV      % Test,
-    "org.scalameta" %%% "munit-scalacheck"  % munitV      % Test,
+    "org.scalameta" %%% "munit-scalacheck"  % "1.0.0-M7"  % Test,
     "org.typelevel" %%% "munit-cats-effect" % munitCEV    % Test
   )
 )
