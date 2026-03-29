@@ -27,7 +27,7 @@ import cats.implicits._
 
 import scala.collection.immutable.Map
 import cats.effect.std.MapRef
-import cats.effect.std.MapRef.fromSeqRefs
+import cats.data.NonEmptySeq
 
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable
@@ -426,7 +426,7 @@ private[mules] object PurgeableMapRef {
 
     shards.map { s =>
       PurgeableMapRef(
-        fromSeqRefs(s),
+        MapRef.fromNonEmptySeqRefs(NonEmptySeq.fromSeqUnsafe(s)),
         purgeExpiredEntries(s)
       )
     }
