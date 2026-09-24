@@ -7,7 +7,6 @@ ThisBuild / developers := List(
   tlGitHubDev("christopherdavenport", "Christopher Davenport")
 )
 ThisBuild / tlCiReleaseBranches := Seq("main")
-ThisBuild / sonatypeCredentialHost := xerial.sbt.Sonatype.sonatypeLegacy
 
 ThisBuild / crossScalaVersions := Seq("2.12.20", "2.13.16", "3.3.5")
 ThisBuild / scalaVersion := "3.3.5"
