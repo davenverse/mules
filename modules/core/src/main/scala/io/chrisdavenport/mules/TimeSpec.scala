@@ -57,14 +57,13 @@ object TimeSpec {
     Duration(timeSpec.nanos, TimeUnit.NANOSECONDS)
 
   /**
-   * The absolute expiration for an entry inserted at `nowNanos` with a
-   * lifetime of `ttl`, saturating rather than wrapping.
+   * The absolute expiration for an entry inserted at `nowNanos` with a lifetime of `ttl`,
+   * saturating rather than wrapping.
    *
-   * Long nanosecond arithmetic wraps silently on overflow, and expiry is
-   * tested with `expiration < now`, so a wrapped -- and therefore negative --
-   * expiration reads as "already expired". Without this, a sufficiently large
-   * TTL makes an entry expire immediately, which is the exact opposite of what
-   * was asked for.
+   * Long nanosecond arithmetic wraps silently on overflow, and expiry is tested with
+   * `expiration < now`, so a wrapped -- and therefore negative -- expiration reads as "already
+   * expired". Without this, a sufficiently large TTL makes an entry expire immediately, which is
+   * the exact opposite of what was asked for.
    */
   private[mules] def expiresAt(nowNanos: Long, ttl: TimeSpec): TimeSpec = {
     val sum = nowNanos + ttl.nanos
