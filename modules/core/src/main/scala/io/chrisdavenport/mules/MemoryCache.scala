@@ -72,7 +72,7 @@ final class MemoryCache[F[_], K, V] private[MemoryCache] (
   def insertWithTimeout(optionTimeout: Option[TimeSpec])(k: K, v: V): F[Unit] = {
     for {
       now <- Clock[F].monotonic
-      timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now.toNanos + ts.nanos))
+      timeout = optionTimeout.map(ts => TimeSpec.expiresAt(now.toNanos, ts))
       _ <- mapRef.setKeyValue(k, MemoryCacheItem[V](v, timeout))
       _ <- onInsert(k, v)
     } yield ()

@@ -83,7 +83,7 @@ class AutoFetchingCache[F[_]: Temporal, K, V](
   )(k: K, v: V): F[Unit] = {
     for {
       now <- Clock[F].monotonic
-      timeout = optionTimeout.map(ts => TimeSpec.unsafeFromNanos(now.toNanos + ts.nanos))
+      timeout = optionTimeout.map(ts => TimeSpec.expiresAt(now.toNanos, ts))
       _ <- values.update(_ + (k -> AutoFetchingCache.CacheItem[F, V](v, timeout)))
     } yield ()
   }
