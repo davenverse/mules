@@ -54,7 +54,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
       Deferred[F, Either[Throwable, V]].flatMap { deferred =>
         C.monotonic.flatMap { now =>
           val timeout =
-            defaultExpiration.map(ts => TimeSpec.unsafeFromNanos(now.toNanos + ts.nanos))
+            defaultExpiration.map(ts => TimeSpec.expiresAt(now.toNanos, ts))
           mapRef(k).modify {
             case None => (DispatchOneCacheItem[F, V](deferred, timeout).some, deferred.some)
             case s @ Some(_) => (s, None)
@@ -138,11 +138,17 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
             case Right(v) => v.pure[F]
             case Left(err) =>
               err match {
-                case CancelationDuringDispatchOneCacheInsertProcessing => lookupOrLoad(k, action)
+                // Retry, but cede first. This path is taken when another fiber
+                // was cancelled mid-insert, and under sustained cancellation it
+                // can retry many times in a row with nothing suspending in
+                // between -- enough to monopolise a compute worker and starve
+                // the very fibers that would let it make progress.
+                case CancelationDuringDispatchOneCacheInsertProcessing =>
+                  F.cede >> lookupOrLoad(k, action)
                 case _ => F.raiseError(err)
               }
           }
-        case _ => lookupOrLoad(k, action) // cache miss case?
+        case _ => F.cede >> lookupOrLoad(k, action) // cache miss case?
       }
   }
 
@@ -152,7 +158,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
       now <- Clock[F].monotonic
       item = DispatchOneCacheItem(
         defer,
-        defaultExpiration.map(spec => TimeSpec.unsafeFromNanos(now.toNanos + spec.nanos))
+        defaultExpiration.map(spec => TimeSpec.expiresAt(now.toNanos, spec))
       ).some
       out <- mapRef(k)
         .getAndSet(item)
@@ -184,7 +190,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
     now <- C.monotonic
     item = DispatchOneCacheItem(
       defered,
-      defaultExpiration.map(spec => TimeSpec.unsafeFromNanos(now.toNanos + spec.nanos))
+      defaultExpiration.map(spec => TimeSpec.expiresAt(now.toNanos, spec))
     ).some
     action <- mapRef(k).modify {
       case None =>
@@ -205,7 +211,7 @@ final class DispatchOneCache[F[_], K, V] private[DispatchOneCache] (
     now <- C.monotonic
     item = DispatchOneCacheItem(
       defered,
-      optionTimeout.map(spec => TimeSpec.unsafeFromNanos(now.toNanos + spec.nanos))
+      optionTimeout.map(spec => TimeSpec.expiresAt(now.toNanos, spec))
     ).some
     action <- mapRef(k).modify {
       case None =>
