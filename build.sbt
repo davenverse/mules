@@ -1,4 +1,4 @@
-ThisBuild / tlBaseVersion := "0.7"
+ThisBuild / tlBaseVersion := "0.8"
 ThisBuild / organization := "io.chrisdavenport"
 ThisBuild / organizationName := "Christopher Davenport"
 ThisBuild / startYear := Some(2018)
@@ -8,8 +8,8 @@ ThisBuild / developers := List(
 )
 ThisBuild / tlCiReleaseBranches := Seq()
 
-ThisBuild / crossScalaVersions := Seq("2.12.20", "2.13.16", "3.3.5")
-ThisBuild / scalaVersion := "3.3.5"
+ThisBuild / crossScalaVersions := Seq("2.13.18", "3.3.8")
+ThisBuild / scalaVersion := "3.3.8"
 
 ThisBuild / testFrameworks += new TestFramework("munit.Framework")
 
@@ -17,12 +17,12 @@ ThisBuild / versionScheme := Some("early-semver")
 
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
-val catsV = "2.9.0"
-val catsEffectV = "3.4.9"
+val catsV = "2.13.0"
+val catsEffectV = "3.7.1"
 val catsCollectionV = "0.9.6"
 
-val munitV = "1.0.0-M7"
-val munitCEV = "2.0.0-M3"
+val munitV = "1.3.1"
+val munitCEV = "2.2.1"
 
 lazy val mules = tlCrossRootProject
   .aggregate(core, caffeine, reload, noop, bench)
